@@ -9,4 +9,6 @@
 <use name="DataFormats/Candidate"/>
 <use name="DataFormats/VertexSoA"/>
 <use name="HeterogeneousCore/AlpakaInterface"/>
+<use name="HeterogeneousCore/AlpakaCore"/>
+<use name="HeterogeneousCore/AlpakaTools"/>
 <flags ALPAKA_BACKENDS="!serial"/>

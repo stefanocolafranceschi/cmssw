@@ -13,5 +13,7 @@
 <use name="RecoLocalTracker/Records"/>
 <use name="Geometry/TrackerGeometryBuilder"/>
 <use name="Geometry/Records"/>
+<use name="HeterogeneousCore/AlpakaCore"/>
+<use name="HeterogeneousCore/AlpakaTools"/>
 <flags EDM_PLUGIN="1"/>
 <flags ALPAKA_BACKENDS="1"/>

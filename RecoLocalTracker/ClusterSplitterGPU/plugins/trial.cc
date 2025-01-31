@@ -8,9 +8,16 @@
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/Framework/interface/ESHandle.h"
-#include "FWCore/ParameterSet/interface/ParameterSet.h"
-#include "FWCore/Utilities/interface/StreamID.h"
+
 #include "FWCore/Utilities/interface/stringize.h"
+#include "FWCore/Utilities/interface/EDGetToken.h"
+#include "FWCore/Utilities/interface/InputTag.h"
+#include "FWCore/Utilities/interface/StreamID.h"
+
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/Framework/interface/Frameworkfwd.h"
 
 #include "TFile.h"
 #include "TString.h"
@@ -55,21 +62,31 @@
 #include "Geometry/CommonTopologies/interface/SimplePixelTopology.h"
 #include "Geometry/Records/interface/GlobalTrackingGeometryRecord.h"
 
+
+#include "HeterogeneousCore/AlpakaInterface/interface/Backend.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/devices.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
-
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/Event.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/EventSetup.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/global/EDProducer.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/stream/SynchronizingEDProducer.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/MakerMacros.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDMetadata.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDMetadataSentry.h"
 #include "Cluster_test.h"
+
 #include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometryLayout.h"
 #include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrySoACollection.h"
 
 #include "DataFormats/CandidateSoA/interface/CandidateLayout.h"
 #include "DataFormats/CandidateSoA/interface/alpaka/CandidateSoACollection.h"
 
+
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
-class trial : public edm::stream::EDProducer<> {
+class trial : public global::EDProducer<> {
 public:
   explicit trial(const edm::ParameterSet&);
   ~trial() override;
@@ -77,9 +94,10 @@ public:
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
 private:
-  void beginStream(edm::StreamID) override;
-  void produce(edm::Event&, const edm::EventSetup&) override;
-  void endStream() override;
+
+  void produce(edm::StreamID sid, edm::Event&, device::Event& event, device::EventSetup const& setup) const override;
+  //void produce(edm::Event&, const edm::EventSetup&) override;
+
 
   std::string configString_;
   uint32_t nHits_;
@@ -100,47 +118,49 @@ private:
   double forceXError_;
   double forceYError_;  
   double fractionalWidth_;
-  edm::EDGetTokenT<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clusterToken_;
-  edm::EDGetTokenT<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisToken_;
-  edm::EDGetTokenT<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clusterToken_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisToken_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
   edm::EDGetTokenT<edm::View<reco::Candidate>> candidateToken_;
-  edm::EDGetTokenT<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexToken_;
-  edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> const tTrackingGeom_;
-  edm::ESGetToken<TrackerTopology, TrackerTopologyRcd> const tTrackerTopo_;
-
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexToken_;
+  const edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> tTrackingGeom_;
+  const edm::ESGetToken<TrackerTopology, TrackerTopologyRcd> tTrackerTopo_;
   bool verbose_;
 };
 
+
+
 trial::trial(const edm::ParameterSet& iConfig)
-    : configString_(iConfig.getParameter<std::string>("configString")),
+    : EDProducer<>(),
+      configString_(iConfig.getParameter<std::string>("configString")),
       nHits_(iConfig.getParameter<uint32_t>("nHits")),
       offset_(iConfig.getParameter<int32_t>("offset")),
       rootFile_(nullptr),
-      ptMin_(iConfig.getParameter<double>("ptMin")),      
-      deltaR_(iConfig.getParameter<double>("deltaR")),      
-      chargeFracMin_(iConfig.getParameter<double>("chargeFracMin")),      
+      ptMin_(iConfig.getParameter<double>("ptMin")),
+      deltaR_(iConfig.getParameter<double>("deltaR")),
+      chargeFracMin_(iConfig.getParameter<double>("chargeFracMin")),
       tanLorentzAngle_(iConfig.getParameter<double>("tanLorentzAngle")),
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
       expSizeXAtLorentzAngleIncidence_(iConfig.getParameter<double>("expSizeXAtLorentzAngleIncidence")),
       expSizeXDeltaPerTanAlpha_(iConfig.getParameter<double>("expSizeXDeltaPerTanAlpha")),
       expSizeYAtNormalIncidence_(iConfig.getParameter<double>("expSizeYAtNormalIncidence")),
       centralMIPCharge_(iConfig.getParameter<double>("centralMIPCharge")),
-      chargePerUnit_(iConfig.getParameter<double>("chargePerUnit_")),
-      forceXError_(iConfig.getParameter < double > ("forceXError")),
-      forceYError_(iConfig.getParameter < double > ("forceYError")),      
-      fractionalWidth_(iConfig.getParameter < double > ("fractionalWidth")),      
-      clusterToken_(consumes<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection>(edm::InputTag("siPixelClusters"))),
-      digisToken_(consumes<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection>(edm::InputTag("SiPixelDigisSoA"))),
-      recHitsToken_(consumes<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>>(edm::InputTag("TrackingRecHitsSoA"))),
+      chargePerUnit_(iConfig.getParameter<double>("chargePerUnit")),
+      forceXError_(iConfig.getParameter<double>("forceXError")),
+      forceYError_(iConfig.getParameter<double>("forceYError")),
+      fractionalWidth_(iConfig.getParameter<double>("fractionalWidth")),
+      clusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
+      digisToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelDigis"))),
+      recHitsToken_(consumes(iConfig.getParameter<edm::InputTag>("trackingRecHits"))),
       candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("candidateInput"))),
-      zVertexToken_(consumes<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection>(edm::InputTag("ZVertex"))),
+      zVertexToken_(consumes(iConfig.getParameter<edm::InputTag>("zVertex"))),
       tTrackingGeom_(esConsumes()),
       tTrackerTopo_(esConsumes()),
-      verbose_(iConfig.getParameter<bool>("verbose"))      
-        {
-            rootFile_ = new TFile("config_output.root", "RECREATE");
-            produces<std::vector<int>>("outputHits");
-        }
+      verbose_(iConfig.getParameter<bool>("verbose"))
+      {
+          rootFile_ = new TFile("config_output.root", "RECREATE");
+          //produces<std::vector<int>>("outputHits");
+      }
 
 
 trial::~trial() {
@@ -150,18 +170,8 @@ trial::~trial() {
   }
 }
 
-void trial::beginStream(edm::StreamID) {
-  // Initialize devices
-  devices_ = cms::alpakatools::devices<Platform>();
-  if (devices_.empty()) {
-    edm::LogError("trial") << "No devices available for the backend. The test will be skipped.";
-    return;
-  }
-  edm::LogInfo("trial") << "Found " << devices_.size() << " device(s).";
-}
-
-
-void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+void trial::produce(edm::StreamID sid, edm::Event& iEvent, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
+//void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
     if (devices_.empty()) {
         edm::LogWarning("trial") << "Skipping event because no devices are available.";
         return;
@@ -171,64 +181,46 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
     // ---------------------------------------------------------------
     // RETRIEVE THE SOA COLLECTIONS TO BE USED IN THE KERNEL DEVICE
     // (THE FOLLOWING DATA ARE ALREADY ALPAKA-FRIENDLY)
-    edm::Handle<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clustersHandle;
-    iEvent.getByToken(clusterToken_, clustersHandle);
-    if (!clustersHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve SiPixelClusters.";
-        return;
-    }
 
-    edm::Handle<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisHandle;
-    iEvent.getByToken(digisToken_, digisHandle);
-    if (!digisHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve SiPixelDigisSoA.";
-        return;
-    }
+    // Retrieve SiPixelClustersSoACollection
+    auto const& clusters = deviceEvent.get(clusterToken_);
 
-    edm::Handle<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsHandle;
-    iEvent.getByToken(recHitsToken_, recHitsHandle);
-    if (!recHitsHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve TrackingRecHitsSoA.";
-        return;
-    }
+    // Retrieve SiPixelDigisSoACollection
+    auto const& digis = deviceEvent.get(digisToken_);
 
-    edm::Handle<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexHandle;
-    iEvent.getByToken(zVertexToken_, zVertexHandle);
-    if (!zVertexHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve zVertexHandle";
-        return;
-    }
+    // Retrieve TrackingRecHitsSoACollection
+    auto const& recHits = deviceEvent.get(recHitsToken_);
 
+    // Retrieve ZVertexSoACollection
+    auto const& zVertices = deviceEvent.get(zVertexToken_);
+
+/*
     // Process TrackingRecHitsSoACollection
-    const auto& recHits = *recHitsHandle;
-    size_t nHits = recHits.nHits();
+    size_t nHits = recHits->nHits();
     if (verbose_) {
         std::cout << "Number of hits: " << nHits << std::endl;
     }
 
     // Process SiPixelDigisSoACollection
-    const auto& digis = *digisHandle;
-    size_t nDigis = digis.nDigis();
+    size_t nDigis = digis->nDigis();
     if (verbose_) {
         std::cout << "Number of digis: " << nDigis << std::endl;
     }
 
     // Process SiPixelClustersSoACollection
-    const auto& clusters = *clustersHandle;
-    uint32_t nClusters = clusters.nClusters();
+    uint32_t nClusters = clusters->nClusters();
     if (verbose_) {
         std::cout << "Total clusters in this event: " << nClusters << std::endl;
     }
 
     // Process ZVertexSoACollection
-    const auto& zVertices = *zVertexHandle;
-    uint32_t nVertices = zVertices.view().nvFinal();
+    uint32_t nVertices = zVertices->view().nvFinal();
     if (verbose_) {
         std::cout << "Number of Vertices: " << nVertices << std::endl;
     }
-    
-    // -DONE WITH THE SOA STUFF-------------------------------------------------------------
 
+    // -DONE WITH THE SOA STUFF-------------------------------------------------------------
+*/
 
 
 
@@ -319,11 +311,10 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
     // -DONE WITH THE NON SOA STUFF---------------------------------------------------------------------------
 
 
-
+/*
     // Use event ID as the offset
     int32_t eventOffset = iEvent.id().event();
     std::cout << "Event offset: " << eventOffset << std::endl;
-
     for (const auto& device : devices_) {
         Queue queue(device);
 
@@ -344,7 +335,7 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
         /* RecHits
            the TrackingRecHitsSoACollection is an alias for: TrackingRecHitDevice (gpu) 
                                                             TrackingRecHitHost (cpu)  */
-        TrackingRecHitsSoACollection<pixelTopology::Phase1> tkHit(queue, nHits, eventOffset, moduleStartD.data());
+//        TrackingRecHitsSoACollection<pixelTopology::Phase1> tkHit(queue, nHits, eventOffset, moduleStartD.data());
         //- - - - - - - - - - - - - - - - - - -
 
         /* Digis 
@@ -352,38 +343,39 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
                                                           SiPixelDigisHost (cpu)
         but it's not templated so <pixelTopology> won't work
         I could also: SiPixelDigisDevice<Device> digisDevice(nDigis, queue); */
-        SiPixelDigisSoACollection tkDigi(nDigis, queue);
-        tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
+//        SiPixelDigisSoACollection tkDigi(nDigis, queue);
+//        tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
         //- - - - - - - - - - - - - - - - - - -
 
         /* Clusters
            the SiPixelClustersSoACollection is an alias for: SiPixelClustersDevice (gpu) 
                                                              SiPixelClustersHost (cpu)  */
-        SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
+//        SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
         //- - - - - - - - - - - - - - - - - - -
 
         /* Candidates*/
-        CandidateSoACollection tkCandidates(nCandidates, queue);
-        auto CandidatesdeviceView = tkCandidates.view();
+//        CandidateSoACollection tkCandidates(nCandidates, queue);
+//        auto CandidatesdeviceView = tkCandidates.view();
         //- - - - - - - - - - - - - - - - - - -
 
 
         /* Geometry*/
-        ClusterGeometrySoACollection tkgeoclusters(nClusters, queue);
-        auto deviceView = tkgeoclusters.view();
+//        ClusterGeometrySoACollection tkgeoclusters(nClusters, queue);
+//        auto deviceView = tkgeoclusters.view();
         //- - - - - - - - - - - - - - - - - - -
 
 
         /* Vertices                    */
-        ZVertexSoACollection tkVertices(queue);
+//        ZVertexSoACollection tkVertices(queue);
         //- - - - - - - - - - - - - - - - - - -
 
         /* SoA for the output                    */
-        SiPixelDigisSoACollection tkOutputDigis(nDigis, queue);
-        SiPixelClustersSoACollection tkOutputClusters(nClusters, queue);
+//        SiPixelDigisSoACollection tkOutputDigis(nDigis, queue);
+//        SiPixelClustersSoACollection tkOutputClusters(nClusters, queue);
 
         // ------------- COPY FROM HOST TO DEVICE BUFFERS -------------------------------
         // The output SoA are initialized with the input ones (in case no cluster will be split)
+/*
         alpaka::memcpy(queue, tkHit.buffer(), recHitsHandle->buffer());
         alpaka::memcpy(queue, tkDigi.buffer(), digisHandle->buffer());
         alpaka::memcpy(queue, tkClusters.buffer(), clustersHandle->buffer());
@@ -463,21 +455,34 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
 
         alpaka::wait(queue);
     }
+    */
+    
 }
 
 
-
-void trial::endStream() {
-  edm::LogInfo("trial") << "Processing completed.";
-}
 
 void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
-  edm::ParameterSetDescription desc;
-  desc.add<std::string>("configString", "default")->setComment("Configuration string to store in ROOT file");
-  desc.add<uint32_t>("nHits", 100)->setComment("Number of hits for the test");
-  desc.add<int32_t>("offset", 0)->setComment("Offset for hits");
-  descriptions.add("trial", desc);
+    edm::ParameterSetDescription desc;
+    desc.add<std::string>("configString", "default")->setComment("Configuration string to store in ROOT file");
+    desc.add<uint32_t>("nHits", 100)->setComment("Number of hits for the test");
+    desc.add<int32_t>("offset", 0)->setComment("Offset for hits");
+    desc.add<double>("ptMin", 200.0)->setComment("Minimum pt");
+    desc.add<double>("deltaR", 0.05)->setComment("Delta R");
+    desc.add<double>("chargeFracMin", 2.0)->setComment("Minimum charge fraction");
+    desc.add<double>("tanLorentzAngle", 0.02)->setComment("Lorentz angle");
+    desc.add<double>("tanLorentzAngleBarrelLayer1", 0.015)->setComment("Lorentz angle for Barrel Layer 1");
+    desc.add<double>("expSizeXAtLorentzAngleIncidence", 0.1)->setComment("Expected size X at Lorentz angle incidence");
+    desc.add<double>("expSizeXDeltaPerTanAlpha", 0.02)->setComment("Expected size X delta per tan(alpha)");
+    desc.add<double>("expSizeYAtNormalIncidence", 0.1)->setComment("Expected size Y at normal incidence");
+    desc.add<double>("centralMIPCharge", 26000.0)->setComment("Central MIP charge");
+    desc.add<double>("chargePerUnit", 2000.0)->setComment("Charge per unit");
+    desc.add<double>("forceXError", 100.0)->setComment("Force X error");
+    desc.add<double>("forceYError", 150.0)->setComment("Force Y error");
+    desc.add<double>("fractionalWidth", 0.4)->setComment("Fractional width");
+    desc.add<bool>("verbose", false)->setComment("Verbose output");
+    descriptions.add("trial", desc);
 }
+
 
 DEFINE_FWK_MODULE(trial);
 
