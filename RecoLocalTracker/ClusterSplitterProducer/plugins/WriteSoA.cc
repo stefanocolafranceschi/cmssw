@@ -52,10 +52,10 @@
 
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
-class trial : public edm::stream::EDProducer<> {
+class HelperSplitter : public edm::stream::EDProducer<> {
 public:
-  explicit trial(const edm::ParameterSet&);
-  ~trial() override;
+  explicit HelperSplitter(const edm::ParameterSet&);
+  ~HelperSplitter() override;
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
@@ -76,30 +76,30 @@ private:
 
 };
 
-trial::trial(const edm::ParameterSet& iConfig)
+HelperSplitter::HelperSplitter(const edm::ParameterSet& iConfig)
     : ptMin_(iConfig.getParameter<double>("ptMin")),
       tanLorentzAngle_(iConfig.getParameter<double>("tanLorentzAngle")),
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
-      clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
-      candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("candidateInput"))),
+      clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("SiPixelClusters"))),
+      candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("Candidate"))),
       tTrackingGeom_(esConsumes()),
       tTrackerTopo_(esConsumes()),
       verbose_(iConfig.getParameter<bool>("verbose"))      
         {}
 
-trial::~trial() {
+HelperSplitter::~HelperSplitter() {
 }
 
-void trial::beginStream(edm::StreamID) {
+void HelperSplitter::beginStream(edm::StreamID) {
 }
 
-void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
 
     // Candidate is used for retrieving the jets
     edm::Handle<edm::View<reco::Candidate>> candidatesHandle;
     iEvent.getByToken(candidateToken_, candidatesHandle);
     if (!candidatesHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve Candidate collection.";
+        edm::LogError("HelperSplitter") << "Could not retrieve Candidate";
         return;
     }
 
@@ -130,7 +130,7 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
     edm::Handle<edmNew::DetSetVector<SiPixelCluster>> inputPixelClustersHandle;
     iEvent.getByToken(clusterToken_, inputPixelClustersHandle);
     if (!inputPixelClustersHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve SiPixelClusters.";
+        edm::LogError("HelperSplitter") << "Could not retrieve SiPixelClusters.";
         return;
     }
 
@@ -170,11 +170,11 @@ void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
 }
 
 
-void trial::endStream() {
-  edm::LogInfo("trial") << "Processing completed.";
+void HelperSplitter::endStream() {
+  edm::LogInfo("HelperSplitter") << "Processing completed.";
 }
 
-void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
 
     edm::ParameterSetDescription desc;
     desc.add<bool>("verbose", false)->setComment("Verbose output");
@@ -182,10 +182,10 @@ void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     desc.add<double>("tanLorentzAngle", 0.1)->setComment("Lorentz angle tangent");
     desc.add<double>("tanLorentzAngleBarrelLayer1", 0.2)->setComment("Lorentz angle tangent for Barrel Layer 1");
     desc.add<edm::InputTag>("SiPixelClusters", edm::InputTag("SiPixelClusters"))->setComment("Collection for SiPixelClusters");
-    desc.add<edm::InputTag>("candidateInput", edm::InputTag("CandidateCollection"))->setComment("Collection for candidates");
-    descriptions.add("trial", desc);
+    desc.add<edm::InputTag>("Candidate", edm::InputTag("Candidate"))->setComment("Candidates");
+    descriptions.add("HelperSplitter", desc);
 }
 
-DEFINE_FWK_MODULE(trial);
+DEFINE_FWK_MODULE(HelperSplitter);
 
 #endif
