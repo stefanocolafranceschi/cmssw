@@ -44,7 +44,6 @@
 #include "DataFormats/SiPixelClusterSoA/interface/SiPixelClustersDevice.h"
 #include "DataFormats/SiPixelClusterSoA/interface/SiPixelClustersHost.h"
 #include "DataFormats/SiPixelClusterSoA/interface/alpaka/SiPixelClustersSoACollection.h"
-#include "DataFormats/SiPixelCluster/interface/SiPixelCluster.h"
 
 #include "DataFormats/Common/interface/Handle.h"
 #include "DataFormats/Common/interface/DetSetVector.h"
@@ -56,12 +55,12 @@
 
 #include "DataFormats/GeometryVector/interface/VectorUtil.h"
 #include "DataFormats/TrackerCommon/interface/TrackerTopology.h"
+
 #include "Geometry/Records/interface/TrackerTopologyRcd.h"
 #include "Geometry/CommonDetUnit/interface/GlobalTrackingGeometry.h"
 #include "Geometry/CommonTopologies/interface/PixelTopology.h"
 #include "Geometry/CommonTopologies/interface/SimplePixelTopology.h"
 #include "Geometry/Records/interface/GlobalTrackingGeometryRecord.h"
-
 
 #include "HeterogeneousCore/AlpakaInterface/interface/Backend.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
@@ -83,7 +82,6 @@
 #include "DataFormats/CandidateSoA/interface/CandidateLayout.h"
 #include "DataFormats/CandidateSoA/interface/alpaka/CandidateSoACollection.h"
 
-
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
 class trial : public global::EDProducer<> {
@@ -95,21 +93,19 @@ public:
 
 private:
 
-  void produce(edm::StreamID sid, edm::Event&, device::Event& event, device::EventSetup const& setup) const override;
-  //void produce(edm::Event&, const edm::EventSetup&) override;
+  void produce(edm::StreamID sid, device::Event& event, device::EventSetup const& setup) const override;
 
-
-  std::string configString_;
   uint32_t nHits_;
   int32_t offset_;
+  const double ptMin_;
   TFile* rootFile_;
   std::vector<Device> devices_;
 
-  const double ptMin_;
   double deltaR_;
   double chargeFracMin_;
   float tanLorentzAngle_;
   float tanLorentzAngleBarrelLayer1_;  
+
   float expSizeXAtLorentzAngleIncidence_;
   float expSizeXDeltaPerTanAlpha_;
   float expSizeYAtNormalIncidence_;
@@ -121,22 +117,18 @@ private:
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clusterToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
-  edm::EDGetTokenT<edm::View<reco::Candidate>> candidateToken_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::CandidateSoACollection> candidateToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexToken_;
-  const edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> tTrackingGeom_;
-  const edm::ESGetToken<TrackerTopology, TrackerTopologyRcd> tTrackerTopo_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ClusterGeometrySoACollection> geometryToken_;
   bool verbose_;
 };
 
-
-
 trial::trial(const edm::ParameterSet& iConfig)
     : EDProducer<>(),
-      configString_(iConfig.getParameter<std::string>("configString")),
       nHits_(iConfig.getParameter<uint32_t>("nHits")),
       offset_(iConfig.getParameter<int32_t>("offset")),
-      rootFile_(nullptr),
       ptMin_(iConfig.getParameter<double>("ptMin")),
+      rootFile_(nullptr),
       deltaR_(iConfig.getParameter<double>("deltaR")),
       chargeFracMin_(iConfig.getParameter<double>("chargeFracMin")),
       tanLorentzAngle_(iConfig.getParameter<double>("tanLorentzAngle")),
@@ -152,10 +144,9 @@ trial::trial(const edm::ParameterSet& iConfig)
       clusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
       digisToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelDigis"))),
       recHitsToken_(consumes(iConfig.getParameter<edm::InputTag>("trackingRecHits"))),
-      candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("candidateInput"))),
+      candidateToken_(consumes(iConfig.getParameter<edm::InputTag>("candidateInput"))),
       zVertexToken_(consumes(iConfig.getParameter<edm::InputTag>("zVertex"))),
-      tTrackingGeom_(esConsumes()),
-      tTrackerTopo_(esConsumes()),
+      geometryToken_(consumes(iConfig.getParameter<edm::InputTag>("geometryInput"))),
       verbose_(iConfig.getParameter<bool>("verbose"))
       {
           rootFile_ = new TFile("config_output.root", "RECREATE");
@@ -170,13 +161,11 @@ trial::~trial() {
   }
 }
 
-void trial::produce(edm::StreamID sid, edm::Event& iEvent, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
-//void trial::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
     if (devices_.empty()) {
         edm::LogWarning("trial") << "Skipping event because no devices are available.";
         return;
     }
-
 
     // ---------------------------------------------------------------
     // RETRIEVE THE SOA COLLECTIONS TO BE USED IN THE KERNEL DEVICE
@@ -193,123 +182,6 @@ void trial::produce(edm::StreamID sid, edm::Event& iEvent, device::Event& device
 
     // Retrieve ZVertexSoACollection
     auto const& zVertices = deviceEvent.get(zVertexToken_);
-
-/*
-    // Process TrackingRecHitsSoACollection
-    size_t nHits = recHits->nHits();
-    if (verbose_) {
-        std::cout << "Number of hits: " << nHits << std::endl;
-    }
-
-    // Process SiPixelDigisSoACollection
-    size_t nDigis = digis->nDigis();
-    if (verbose_) {
-        std::cout << "Number of digis: " << nDigis << std::endl;
-    }
-
-    // Process SiPixelClustersSoACollection
-    uint32_t nClusters = clusters->nClusters();
-    if (verbose_) {
-        std::cout << "Total clusters in this event: " << nClusters << std::endl;
-    }
-
-    // Process ZVertexSoACollection
-    uint32_t nVertices = zVertices->view().nvFinal();
-    if (verbose_) {
-        std::cout << "Number of Vertices: " << nVertices << std::endl;
-    }
-
-    // -DONE WITH THE SOA STUFF-------------------------------------------------------------
-*/
-
-
-
-    // --------------------------------------------------------------------------
-    // RETRIEVE THE NON-SOA DATA, NAMELY "Candidate" and "SiPixelClusters"
-
-    // Candidate is used for retrieving the jets --------------
-    edm::Handle<edm::View<reco::Candidate>> candidatesHandle;
-    iEvent.getByToken(candidateToken_, candidatesHandle);
-    if (!candidatesHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve Candidate collection.";
-        return;
-    }
-    // Process Candidates
-    size_t nCandidates = candidatesHandle->size();  // Retrieve the number of candidates
-    if (verbose_) {
-        std::cout << "Number of Candidates: " << nCandidates << std::endl;
-    }
-
-    // Populates the custom-made CandidateSoA -------------------------------------------
-    CandidateSoA candidatedataSoA;
-    CandidateSoAView candidateView(candidatedataSoA);  // Accessor for the columns in the SoA
-
-    // Iterate over the candidates and populate the CandidateSoA
-    size_t candidateIndex = 0;
-    for (const auto& candidate : *candidatesHandle) {
-        if (candidate.pt() > ptMin_) {  // Apply the ptMin_ filter
-            candidateView.px(candidateIndex) = static_cast<float>(candidate.px());
-            candidateView.py(candidateIndex) = static_cast<float>(candidate.py());
-            candidateView.pz(candidateIndex) = static_cast<float>(candidate.pz());
-            candidateView.pt(candidateIndex) = static_cast<float>(candidate.pt());
-            candidateView.eta(candidateIndex) = static_cast<float>(candidate.eta());
-            candidateView.phi(candidateIndex) = static_cast<float>(candidate.phi());
-            ++candidateIndex;
-        }
-    }
-    // --------------------------------------------------------------------------
-    
-
-    // SiPixelClusters is used to get the geometry of each cluster ---------------
-    edm::Handle<edmNew::DetSetVector<SiPixelCluster>> inputPixelClustersHandle;
-    iEvent.getByToken(clusterToken_, inputPixelClustersHandle);
-    if (!inputPixelClustersHandle.isValid()) {
-        edm::LogError("trial") << "Could not retrieve SiPixelClusters.";
-        return;
-    }
-
-    // Retrieve TrackerGeometry, trackerTopology from EventSetup
-    const auto& trackingGeometry = iSetup.getData(tTrackingGeom_);
-    const auto& trackerTopology = iSetup.getData(tTrackerTopo_);
-
-
-    // Populates the custom-made ClusterGeometry SoA -------------------------------------------
-    ClusterGeometrySoA dataSoA;
-    ClusterGeometrySoAView myview(dataSoA);  // Accessor for the columns in the SoA
-
-    // Loop through the SiPixelClusters and populate the ClusterGeometrySoA
-    for (auto detIt = inputPixelClustersHandle->begin(); detIt != inputPixelClustersHandle->end(); ++detIt) {
-        // detIt is now a reference to edmNew::DetSet<SiPixelCluster>
-        const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
-
-        // Retrieve the GeomDet for this DetSet using its id
-        const GeomDet* det = trackingGeometry.idToDet(detset.id());  // Correct usage of geometry
-
-        if (!det) {
-            continue;  // Skip invalid detector IDs
-        }
-
-        // Extract geometry information
-        const PixelTopology& topo = static_cast<const PixelTopology&>(det->topology());
-        float pitchX, pitchY;
-        std::tie(pitchX, pitchY) = topo.pitch();
-        float thickness = det->surface().bounds().thickness();
-        float tanLorentzAngle = tanLorentzAngle_;  // Use the correct tanLorentzAngle from your context
-
-        // Populate the ClusterGeometrySoA with the information
-        size_t clusterIndex = 0;  // Track the index of the cluster in the DetSet
-        for (const auto& cluster : detset) {
-            // Access columns via the view and assign values
-            myview.clusterIds(clusterIndex) = detset.id();  // Directly use the id() (no rawId())
-            myview.pitchX(clusterIndex) = pitchX;
-            myview.pitchY(clusterIndex) = pitchY;
-            myview.thickness(clusterIndex) = thickness;
-            myview.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
-            ++clusterIndex;
-        }
-    }
-    // -DONE WITH THE NON SOA STUFF---------------------------------------------------------------------------
-
 
 /*
     // Use event ID as the offset
@@ -455,15 +327,12 @@ void trial::produce(edm::StreamID sid, edm::Event& iEvent, device::Event& device
 
         alpaka::wait(queue);
     }
-    */
-    
+    */    
 }
-
 
 
 void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     edm::ParameterSetDescription desc;
-    desc.add<std::string>("configString", "default")->setComment("Configuration string to store in ROOT file");
     desc.add<uint32_t>("nHits", 100)->setComment("Number of hits for the test");
     desc.add<int32_t>("offset", 0)->setComment("Offset for hits");
     desc.add<double>("ptMin", 200.0)->setComment("Minimum pt");
