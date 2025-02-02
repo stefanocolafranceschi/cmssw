@@ -63,13 +63,14 @@
 #include "Geometry/Records/interface/GlobalTrackingGeometryRecord.h"
 
 #include "HeterogeneousCore/AlpakaInterface/interface/Backend.h"
-#include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/devices.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/Event.h"
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/EventSetup.h"
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/global/EDProducer.h"
+#include "HeterogeneousCore/AlpakaInterface/interface/config.h"
+
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/stream/SynchronizingEDProducer.h"
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/MakerMacros.h"
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDMetadata.h"
@@ -86,7 +87,7 @@ using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
 class trial : public global::EDProducer<> {
 public:
-  explicit trial(const edm::ParameterSet&);
+  explicit trial(edm::ParameterSet const& iConfig);
   ~trial() override;
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
@@ -123,7 +124,7 @@ private:
   bool verbose_;
 };
 
-trial::trial(const edm::ParameterSet& iConfig)
+trial::trial(edm::ParameterSet const& iConfig)
     : EDProducer<>(),
       nHits_(iConfig.getParameter<uint32_t>("nHits")),
       offset_(iConfig.getParameter<int32_t>("offset")),
@@ -348,6 +349,12 @@ void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     desc.add<double>("forceXError", 100.0)->setComment("Force X error");
     desc.add<double>("forceYError", 150.0)->setComment("Force Y error");
     desc.add<double>("fractionalWidth", 0.4)->setComment("Fractional width");
+    desc.add<edm::InputTag>("candidateInput", edm::InputTag(""))->setComment("Input tag for candidate data");
+    desc.add<edm::InputTag>("geometryInput", edm::InputTag(""))->setComment("Input tag for geometry data");
+    desc.add<edm::InputTag>("siPixelClusters", edm::InputTag(""))->setComment("Input tag for siPixelClusters data");
+    desc.add<edm::InputTag>("siPixelDigis", edm::InputTag(""))->setComment("Input tag for siPixelDigis data");
+    desc.add<edm::InputTag>("trackingRecHits", edm::InputTag(""))->setComment("Input tag for trackingRecHits data");
+    desc.add<edm::InputTag>("zVertex", edm::InputTag(""))->setComment("Input tag for zVertex data");
     desc.add<bool>("verbose", false)->setComment("Verbose output");
     descriptions.add("trial", desc);
 }
