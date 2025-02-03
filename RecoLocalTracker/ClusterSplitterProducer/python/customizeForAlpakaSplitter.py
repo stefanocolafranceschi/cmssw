@@ -32,4 +32,3 @@ def customizeForAlpakaSplitter(process):
     process.schedule.extend([process.towerMaker_step, process.ak4CaloJets_step, process.HelperSplitter_step])
 
     return process
-

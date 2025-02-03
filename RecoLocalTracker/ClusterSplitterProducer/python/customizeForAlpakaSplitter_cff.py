@@ -18,4 +18,3 @@ HelperSplitter = cms.EDProducer(
 # Create the sequence
 HelperSplitterTask = cms.Task(calotowermaker, ak4CaloJets, HelperSplitter)
 HelperSplitterSequence = cms.Sequence(HelperSplitterTask)
-

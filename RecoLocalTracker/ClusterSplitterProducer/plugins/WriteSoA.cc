@@ -44,11 +44,11 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
 
-#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometryLayout.h"
-#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrySoACollection.h"
+#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometrysSoA.h"
+#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrysSoACollection.h"
 
-#include "DataFormats/CandidateSoA/interface/CandidateLayout.h"
-#include "DataFormats/CandidateSoA/interface/alpaka/CandidateSoACollection.h"
+#include "DataFormats/CandidateSoA/interface/CandidatesSoA.h"
+#include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
@@ -110,8 +110,8 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     }
 
     // Create CandidateSoA and populate it
-    auto candidateDataSoA = std::make_unique<CandidateSoA>();
-    CandidateSoAView candidateView(*candidateDataSoA);
+    auto candidateDataSoA = std::make_unique<CandidatesSoA>();
+    CandidatesSoAView candidateView(*candidateDataSoA);
 
     size_t candidateIndex = 0;
     for (const auto& candidate : *candidatesHandle) {
@@ -139,8 +139,8 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     const auto& trackerTopology = iSetup.getData(tTrackerTopo_);
 
     // Create ClusterGeometrySoA and populate it
-    auto clusterDataSoA = std::make_unique<ClusterGeometrySoA>();
-    ClusterGeometrySoAView clusterView(*clusterDataSoA);
+    auto clusterDataSoA = std::make_unique<ClusterGeometrysSoA>();
+    ClusterGeometrysSoAView clusterView(*clusterDataSoA);
 
     for (auto detIt = inputPixelClustersHandle->begin(); detIt != inputPixelClustersHandle->end(); ++detIt) {
         const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
