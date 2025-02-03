@@ -8,11 +8,11 @@
 #include "DataFormats/SiPixelClusterSoA/interface/SiPixelClustersSoA.h"
 #include "DataFormats/VertexSoA/interface/ZVertexSoA.h"
 
-#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometryLayout.h"
-#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrySoACollection.h"
+#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometrysSoA.h"
+#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrysSoACollection.h"
 
-#include "DataFormats/CandidateSoA/interface/CandidateLayout.h"
-#include "DataFormats/CandidateSoA/interface/alpaka/CandidateSoACollection.h"
+#include "DataFormats/CandidateSoA/interface/CandidatesSoA.h"
+#include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 
@@ -58,8 +58,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
                   SiPixelDigisSoAView& digis,
                   SiPixelClustersSoAView& clusters,
                   ZVertexSoAView& vertexView,
-                  CandidateSoAView& candidates,
-                  ClusterGeometrySoAView& geoclusters,
+                  CandidatesSoAView& candidates,
+                  ClusterGeometrysSoAView& geoclusters,
                   double ptMin_,
                   double deltaR_,
                   double chargeFracMin_,

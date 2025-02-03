@@ -35,11 +35,11 @@
 #include "DataFormats/Math/interface/SSEVec.h"
 #include "DataFormats/Math/interface/ExtVec.h"
 
-#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometryLayout.h"
-#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrySoACollection.h"
+#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometrysSoA.h"
+#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrysSoACollection.h"
 
-#include "DataFormats/CandidateSoA/interface/CandidateLayout.h"
-#include "DataFormats/CandidateSoA/interface/alpaka/CandidateSoACollection.h"
+#include "DataFormats/CandidateSoA/interface/CandidatesSoA.h"
+#include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 #include "Cluster_test.h"
 
@@ -59,8 +59,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 SiPixelDigisSoAConstView digiView,
                                 SiPixelClustersSoAConstView clusterView,
                                 ZVertexSoAView vertexView,
-                                CandidateSoAView candidateView,
-                                ClusterGeometrySoAView geoclusterView) const {         
+                                CandidatesSoAView candidateView,
+                                ClusterGeometrysSoAView geoclusterView) const {         
  
 
         // Print debug info for RecHits -----------------------------------
@@ -225,8 +225,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       SiPixelDigisSoAConstView digiView,
                                       SiPixelClustersSoAConstView clusterView,
                                       ZVertexSoAView vertexView,
-                                      CandidateSoAView candidateView,
-                                      ClusterGeometrySoAView geoclusterView,
+                                      CandidatesSoAView candidateView,
+                                      ClusterGeometrysSoAView geoclusterView,
                                       double ptMin_,
                                       double deltaR_,
                                       double chargeFracMin_,
@@ -642,8 +642,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     SiPixelDigisSoAView& digiView,
                     SiPixelClustersSoAView& clusterView,
                     ZVertexSoAView& vertexView,
-                    CandidateSoAView& candidateView,
-                    ClusterGeometrySoAView& geoclusterView,
+                    CandidatesSoAView& candidateView,
+                    ClusterGeometrysSoAView& geoclusterView,
                     double ptMin_,
                     double deltaR_,
                     double chargeFracMin_,
@@ -708,8 +708,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                     SiPixelDigisSoAView& digiView,
                                                     SiPixelClustersSoAView& clusterView,
                                                     ZVertexSoAView& vertexView,
-                                                    CandidateSoAView& candidateView,
-                                                    ClusterGeometrySoAView& geoclusterView,
+                                                    CandidatesSoAView& candidateView,
+                                                    ClusterGeometrysSoAView& geoclusterView,
                                                     double ptMin_,
                                                     double deltaR_,
                                                     double chargeFracMin_,
@@ -732,8 +732,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                     SiPixelDigisSoAView& digiView,
                                                     SiPixelClustersSoAView& clusterView,
                                                     ZVertexSoAView& vertexView,
-                                                    CandidateSoAView& candidateView,
-                                                    ClusterGeometrySoAView& geoclusterView,
+                                                    CandidatesSoAView& candidateView,
+                                                    ClusterGeometrysSoAView& geoclusterView,
                                                     double ptMin_,
                                                     double deltaR_,
                                                     double chargeFracMin_,

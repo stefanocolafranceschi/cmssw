@@ -1,9 +1,9 @@
-#ifndef DataFormats_CandidateSoA_interface_CandidateLayout_h
-#define DataFormats_CandidateSoA_interface_CandidateLayout_h
+#ifndef DataFormats_CandidateSoA_interface_CandidatesSoA_h
+#define DataFormats_CandidateSoA_interface_CandidatesSoA_h
 
 #include "DataFormats/SoATemplate/interface/SoALayout.h"
 
-GENERATE_SOA_LAYOUT(CandidateLayout,
+GENERATE_SOA_LAYOUT(CandidatesLayout,
                     SOA_COLUMN(uint32_t, candidateIndex),
                     SOA_COLUMN(float, px),
                     SOA_COLUMN(float, py),
@@ -12,8 +12,8 @@ GENERATE_SOA_LAYOUT(CandidateLayout,
                     SOA_COLUMN(float, eta),
                     SOA_COLUMN(float, phi))
 
-using CandidateSoA = CandidateLayout<>;
-using CandidateSoAView = CandidateSoA::View;
-using CandidateSoAConstView = CandidateSoA::ConstView;
+using CandidatesSoA = CandidatesLayout<>;
+using CandidatesSoAView = CandidatesSoA::View;
+using CandidatesSoAConstView = CandidatesSoA::ConstView;
 
-#endif  // DataFormats_CandidateSoA_interface_CandidateLayout_h
+#endif  // DataFormats_CandidateSoA_interface_CandidatesSoA_h

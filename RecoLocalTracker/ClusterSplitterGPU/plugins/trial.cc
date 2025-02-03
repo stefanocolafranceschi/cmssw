@@ -77,11 +77,11 @@
 #include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDMetadataSentry.h"
 #include "Cluster_test.h"
 
-#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometryLayout.h"
-#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrySoACollection.h"
+#include "DataFormats/ClusterGeometrySoA/interface/ClusterGeometrysSoA.h"
+#include "DataFormats/ClusterGeometrySoA/interface/alpaka/ClusterGeometrysSoACollection.h"
 
-#include "DataFormats/CandidateSoA/interface/CandidateLayout.h"
-#include "DataFormats/CandidateSoA/interface/alpaka/CandidateSoACollection.h"
+#include "DataFormats/CandidateSoA/interface/CandidatesSoA.h"
+#include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
@@ -118,9 +118,9 @@ private:
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clusterToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
-  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::CandidateSoACollection> candidateToken_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::CandidatesSoACollection> candidateToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexToken_;
-  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ClusterGeometrySoACollection> geometryToken_;
+  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ClusterGeometrysSoACollection> geometryToken_;
   bool verbose_;
 };
 
