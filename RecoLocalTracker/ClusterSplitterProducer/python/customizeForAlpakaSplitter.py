@@ -2,6 +2,8 @@ import FWCore.ParameterSet.Config as cms
 
 def customizeForAlpakaSplitter(process):
 
+    print("Customizing process for HelperSplitter")
+
     # Load necessary producers
     process.load("RecoLocalCalo.CaloTowersCreator.calotowermaker_cfi")  # Load Calo Towers producer
     process.load("RecoJets.JetProducers.ak4CaloJets_cfi")  # Load the ak4CaloJets producer
@@ -14,9 +16,11 @@ def customizeForAlpakaSplitter(process):
     process.towerMaker_step = cms.Path(process.towerMakerTask)
     process.ak4CaloJets_step = cms.Path(process.ak4CaloJetsTask)
 
+    print("AAAAAAA")
+
     # Define the HelperSplitter producer
     process.HelperSplitter = cms.EDProducer("HelperSplitter",
-        Candidate = cms.InputTag("ak4CaloJets"),          # Input for HelperSplitter
+        Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
         SiPixelClusters = cms.InputTag("SiPixelClusters"),
         ptMin = cms.double(0.5),                          # Default value
         tanLorentzAngle = cms.double(0.1),                # Default value
@@ -28,7 +32,10 @@ def customizeForAlpakaSplitter(process):
     process.HelperSplitterTask = cms.Task(process.HelperSplitter)
     process.HelperSplitter_step = cms.Path(process.HelperSplitterTask)
 
-    # Enforce execution order in the schedule
-    process.schedule.extend([process.towerMaker_step, process.ak4CaloJets_step, process.HelperSplitter_step])
+    process.schedule = cms.Schedule(
+        process.towerMaker_step,  # Make sure Calo Towers are created first
+        process.ak4CaloJets_step,  # Then produce ak4CaloJets
+        process.HelperSplitter_step  # Finally, run HelperSplitter
+    )
 
     return process

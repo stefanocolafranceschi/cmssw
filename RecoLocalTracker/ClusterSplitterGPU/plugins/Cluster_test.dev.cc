@@ -427,7 +427,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         // Use atomicAdd to ensure pixels are added correctly
                         uint32_t idx = alpaka::atomicAdd(acc, clusterCounterDevice, uint32_t(1));
                         if (static_cast<uint32_t>(digiView[pixel].clus()) == clusterIdx) {
-                            outputDigi[idx].clus() = clusterIdx;
+                            outputDigi[idx].clus() = idx;
                             outputDigi[idx].xx() = digiView[pixel].xx();
                             outputDigi[idx].yy() = digiView[pixel].yy();
                             outputDigi[idx].xx() = digiView[pixel].adc();

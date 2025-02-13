@@ -163,6 +163,8 @@ trial::~trial() {
 }
 
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
+    std::cout << "Entering in produce method.. testing" << std::endl;  // Printout added here
+
     if (devices_.empty()) {
         edm::LogWarning("trial") << "Skipping event because no devices are available.";
         return;

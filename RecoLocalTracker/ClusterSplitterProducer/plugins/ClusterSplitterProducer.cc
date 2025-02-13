@@ -1,6 +1,7 @@
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 
 #include <memory>
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
 
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/stream/EDProducer.h"
@@ -20,6 +21,20 @@
 #include <unistd.h>
 
 #include <alpaka/alpaka.hpp>
+
+#include "HeterogeneousCore/AlpakaInterface/interface/Backend.h"
+#include "HeterogeneousCore/AlpakaInterface/interface/devices.h"
+#include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
+#include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/Event.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/EventSetup.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/global/EDProducer.h"
+#include "HeterogeneousCore/AlpakaInterface/interface/config.h"
+
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/stream/SynchronizingEDProducer.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/MakerMacros.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDMetadata.h"
+#include "HeterogeneousCore/AlpakaCore/interface/alpaka/EDMetadataSentry.h"
 
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/PatCandidates/interface/PackedCandidate.h"
@@ -80,8 +95,9 @@ HelperSplitter::HelperSplitter(const edm::ParameterSet& iConfig)
     : ptMin_(iConfig.getParameter<double>("ptMin")),
       tanLorentzAngle_(iConfig.getParameter<double>("tanLorentzAngle")),
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
-      clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("SiPixelClusters"))),
-      candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("Candidate"))),
+      clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
+      //candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("Candidate"))),
+      candidateToken_(consumes<edm::View<reco::Candidate>>(iConfig.getParameter<edm::InputTag>("Candidate"))),
       tTrackingGeom_(esConsumes()),
       tTrackerTopo_(esConsumes()),
       verbose_(iConfig.getParameter<bool>("verbose"))      
@@ -94,6 +110,9 @@ void HelperSplitter::beginStream(edm::StreamID) {
 }
 
 void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+
+    printf("*********************************Starting the HelperSplitter producer.\n");
+    //std::cerr << "\n\n\n*************** HELPER SPLITTER IS RUNNING ***************\n\n\n";
 
     // Candidate is used for retrieving the jets
     edm::Handle<edm::View<reco::Candidate>> candidatesHandle;
@@ -109,9 +128,23 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
         std::cout << "Number of Candidates: " << nCandidates << std::endl;
     }
 
-    // Create CandidateSoA and populate it
-    auto candidateDataSoA = std::make_unique<CandidatesSoA>();
-    CandidatesSoAView candidateView(*candidateDataSoA);
+    // Count the number of valid candidates that pass the ptMin_ filter
+    size_t validCandidatesCount = 0;
+    for (const auto& candidate : *candidatesHandle) {
+        if (candidate.pt() > ptMin_) {
+            ++validCandidatesCount;
+        }
+    }
+    if (verbose_) std::cout << "Number of valid Candidates: " << validCandidatesCount << std::endl;
+
+    // Create the queue for the CPU device
+    auto const& device = cms::alpakatools::devices<Platform>()[0];
+    Queue queue(device);
+    if (verbose_) std::cout << "Queue done" << std::endl;
+
+    CandidatesHost tkCandidates(nCandidates, queue);
+    if (verbose_) std::cout << "nCandidates done" << std::endl;
+    auto candidateView = tkCandidates.view();
 
     size_t candidateIndex = 0;
     for (const auto& candidate : *candidatesHandle) {
@@ -125,18 +158,22 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
             ++candidateIndex;
         }
     }
+    if (verbose_) std::cout << "Done with Candidates" << std::endl;
 
     // SiPixelClusters is used to get the geometry of each cluster
     edm::Handle<edmNew::DetSetVector<SiPixelCluster>> inputPixelClustersHandle;
     iEvent.getByToken(clusterToken_, inputPixelClustersHandle);
     if (!inputPixelClustersHandle.isValid()) {
-        edm::LogError("HelperSplitter") << "Could not retrieve SiPixelClusters.";
+        edm::LogError("HelperSplitter") << "Could not retrieve siPixelClusters.";
         return;
     }
+    if (verbose_) std::cout << "siPixelClusters got it" << std::endl;
 
     // Retrieve TrackerGeometry, trackerTopology from EventSetup
     const auto& trackingGeometry = iSetup.getData(tTrackingGeom_);
     const auto& trackerTopology = iSetup.getData(tTrackerTopo_);
+    if (verbose_) std::cout << "TrackerGeometry/Topology got it" << std::endl;
+
 
     // Create ClusterGeometrySoA and populate it
     auto clusterDataSoA = std::make_unique<ClusterGeometrysSoA>();
@@ -165,8 +202,8 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     }
 
     // Put the CandidateSoA and ClusterGeometrySoA into the event
-    iEvent.put(std::move(candidateDataSoA), "CandidateSoA");
-    iEvent.put(std::move(clusterDataSoA), "ClusterGeometrySoA");
+    //iEvent.put(std::move(tkCandidates), "CandidateSoA");
+    //iEvent.put(std::move(clusterDataSoA), "ClusterGeometrySoA");
 }
 
 
@@ -181,7 +218,7 @@ void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptio
     desc.add<double>("ptMin", 0.5)->setComment("Minimum pt for filtering candidates");
     desc.add<double>("tanLorentzAngle", 0.1)->setComment("Lorentz angle tangent");
     desc.add<double>("tanLorentzAngleBarrelLayer1", 0.2)->setComment("Lorentz angle tangent for Barrel Layer 1");
-    desc.add<edm::InputTag>("SiPixelClusters", edm::InputTag("SiPixelClusters"))->setComment("Collection for SiPixelClusters");
+    desc.add<edm::InputTag>("siPixelClusters", edm::InputTag("siPixelClusters"))->setComment("Collection for siPixelClusters");
     desc.add<edm::InputTag>("Candidate", edm::InputTag("Candidate"))->setComment("Candidates");
     descriptions.add("HelperSplitter", desc);
 }
