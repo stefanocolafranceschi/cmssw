@@ -1,10 +1,15 @@
 import FWCore.ParameterSet.Config as cms
 
-from Configuration.Geometry.GeometryReco_cff import *
-from Configuration.Geometry.GeometryExtended_cff import *
+from Geometry.CommonTopologies.globalTrackingGeometry_cfi import *
+from Geometry.TrackerGeometryBuilder.trackerGeometry_cfi import *
+
 
 process = cms.Process("RECOCC")
 
+process.load("Configuration.Geometry.GeometryRecoDB_cff")
+process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+from Configuration.AlCa.GlobalTag import GlobalTag
+process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
 
 process.HelperSplitter = cms.EDProducer("HelperSplitter",
     Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
