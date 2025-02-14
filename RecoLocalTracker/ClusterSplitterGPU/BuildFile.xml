@@ -10,4 +10,5 @@
 <use name="DataFormats/VertexSoA"/>
 <use name="HeterogeneousCore/AlpakaInterface"/>
 <use name="HeterogeneousCore/AlpakaCore"/>
+<use name="HeterogeneousCore/AlpakaServices"/>
 <flags ALPAKA_BACKENDS="!serial"/>
