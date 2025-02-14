@@ -142,10 +142,12 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     Queue queue(device);
     if (verbose_) std::cout << "Queue done" << std::endl;
 
+    // Create the CandidateSoA on CPU
     CandidatesHost tkCandidates(nCandidates, queue);
-    if (verbose_) std::cout << "nCandidates done" << std::endl;
     auto candidateView = tkCandidates.view();
+    if (verbose_) std::cout << "Candidates done" << std::endl;
 
+    // Fill the CandidateSoA
     size_t candidateIndex = 0;
     for (const auto& candidate : *candidatesHandle) {
         if (candidate.pt() > ptMin_) {  // Apply the ptMin_ filter
@@ -169,15 +171,23 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     }
     if (verbose_) std::cout << "siPixelClusters got it" << std::endl;
 
+
+    // Process inputPixelClustersHandle
+    size_t nPixelClusters = inputPixelClustersHandle->size();
+    if (verbose_) {
+        std::cout << "Number of Pixels: " << nPixelClusters << std::endl;
+    }
+    
+
     // Retrieve TrackerGeometry, trackerTopology from EventSetup
     const auto& trackingGeometry = iSetup.getData(tTrackingGeom_);
     const auto& trackerTopology = iSetup.getData(tTrackerTopo_);
     if (verbose_) std::cout << "TrackerGeometry/Topology got it" << std::endl;
 
-
-    // Create ClusterGeometrySoA and populate it
-    auto clusterDataSoA = std::make_unique<ClusterGeometrysSoA>();
-    ClusterGeometrysSoAView clusterView(*clusterDataSoA);
+    // Create the ClusterGeometrySoA on CPU
+    ClusterGeometrysHost tkCluster(nPixelClusters, queue);
+    auto clusterView = tkCluster.view();
+    if (verbose_) std::cout << "Cluster done" << std::endl;
 
     for (auto detIt = inputPixelClustersHandle->begin(); detIt != inputPixelClustersHandle->end(); ++detIt) {
         const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
