@@ -16,8 +16,6 @@ def customizeForAlpakaSplitter(process):
     process.towerMaker_step = cms.Path(process.towerMakerTask)
     process.ak4CaloJets_step = cms.Path(process.ak4CaloJetsTask)
 
-    print("AAAAAAA")
-
     # Define the HelperSplitter producer
     process.HelperSplitter = cms.EDProducer("HelperSplitter",
         Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),

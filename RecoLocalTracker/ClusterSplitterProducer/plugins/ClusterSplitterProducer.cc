@@ -101,7 +101,10 @@ HelperSplitter::HelperSplitter(const edm::ParameterSet& iConfig)
       tTrackingGeom_(esConsumes()),
       tTrackerTopo_(esConsumes()),
       verbose_(iConfig.getParameter<bool>("verbose"))      
-        {}
+        {
+            produces<CandidatesHost>("candidateDataSoA");
+            produces<ClusterGeometrysHost>("ClusterGeometrySoA");
+        }
 
 HelperSplitter::~HelperSplitter() {
 }
@@ -212,7 +215,10 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     }
 
     // Put the CandidateSoA and ClusterGeometrySoA into the event
-    //iEvent.put(std::move(tkCandidates), "CandidateSoA");
+    iEvent.put(std::make_unique<CandidatesHost>(std::move(tkCandidates)), "candidateDataSoA");
+    iEvent.put(std::make_unique<ClusterGeometrysHost>(std::move(tkCluster)), "ClusterGeometrySoA");
+
+    //iEvent.put(std::move(tkCandidates), "candidateDataSoA");
     //iEvent.put(std::move(clusterDataSoA), "ClusterGeometrySoA");
 }
 
