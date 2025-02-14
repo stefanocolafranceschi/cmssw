@@ -100,7 +100,6 @@ private:
   int32_t offset_;
   const double ptMin_;
   TFile* rootFile_;
-  std::vector<Device> devices_;
 
   double deltaR_;
   double chargeFracMin_;
@@ -122,6 +121,7 @@ private:
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ClusterGeometrysSoACollection> geometryToken_;
   bool verbose_;
+  std::vector<Device> devices_;  
 };
 
 trial::trial(edm::ParameterSet const& iConfig)
@@ -148,7 +148,9 @@ trial::trial(edm::ParameterSet const& iConfig)
       candidateToken_(consumes(iConfig.getParameter<edm::InputTag>("candidateInput"))),
       zVertexToken_(consumes(iConfig.getParameter<edm::InputTag>("zVertex"))),
       geometryToken_(consumes(iConfig.getParameter<edm::InputTag>("geometryInput"))),
-      verbose_(iConfig.getParameter<bool>("verbose"))
+      verbose_(iConfig.getParameter<bool>("verbose")),
+      devices_(cms::alpakatools::devices<alpaka::PlatformCudaRt>())
+
       {
           rootFile_ = new TFile("config_output.root", "RECREATE");
           //produces<std::vector<int>>("outputHits");
@@ -165,10 +167,16 @@ trial::~trial() {
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
     std::cout << "Entering in produce method.. testing" << std::endl;  // Printout added here
 
-    if (devices_.empty()) {
-        edm::LogWarning("trial") << "Skipping event because no devices are available.";
-        return;
+    // Ensure we're selecting the first available GPU device
+    auto const& deviceList = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
+    if (deviceList.empty()) {
+        if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
+        throw cms::Exception("Configuration") << "No available Alpaka GPU devices found!";
     }
+
+    // Select the first GPU device
+    auto const& device = deviceList[0];
+    std::cout << "Using GPU device: " << alpaka::getName(device) << std::endl;
 
     // ---------------------------------------------------------------
     // RETRIEVE THE SOA COLLECTIONS TO BE USED IN THE KERNEL DEVICE

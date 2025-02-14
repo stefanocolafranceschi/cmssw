@@ -3,15 +3,15 @@ import FWCore.ParameterSet.Config as cms
 from Geometry.CommonTopologies.globalTrackingGeometry_cfi import *
 from Geometry.TrackerGeometryBuilder.trackerGeometry_cfi import *
 from Configuration.ProcessModifiers.alpaka_cff import alpaka
-
 process = cms.Process("RECOCC",alpaka)
 
+process.load('Configuration.StandardSequences.Services_cff')
 process.load("Configuration.Geometry.GeometryRecoDB_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
-process.load("HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi")
-process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceSerialSync_cfi")
-process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceCudaAsync_cfi")
-process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceROCmAsync_cfi")
+#process.load("HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi")
+#process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceSerialSync_cfi")
+#process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceCudaAsync_cfi")
+#process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceROCmAsync_cfi")
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
