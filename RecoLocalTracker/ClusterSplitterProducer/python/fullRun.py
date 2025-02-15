@@ -8,10 +8,10 @@ process = cms.Process("RECOCC",alpaka)
 process.load('Configuration.StandardSequences.Services_cff')
 process.load("Configuration.Geometry.GeometryRecoDB_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
-#process.load("HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi")
-#process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceSerialSync_cfi")
-#process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceCudaAsync_cfi")
-#process.load("HeterogeneousCore.AlpakaServices.AlpakaServiceROCmAsync_cfi")
+process.load("RecoLocalTracker.SiPixelClusterizer.siPixelClustersPreSplitting_cff")
+process.load("RecoLocalTracker.SiStripClusterizer.SiStripClusterChargeCut_cfi")
+process.load("RecoLocalTracker.SiPixelRecHits.SiPixelRecHits_cfi")
+process.load("RecoTracker.Configuration.RecoPixelVertexing_cff")
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
@@ -44,21 +44,27 @@ process.trial = cms.EDProducer(
     forceXError=cms.double(100),
     forceYError=cms.double(150),
     fractionalWidth=cms.double(0.4),
-    siPixelClusters=cms.InputTag("SiPixelClustersSoACollection"),   # Replace with correct InputTags
-    siPixelDigis=cms.InputTag("SiPixelDigisSoACollection"),
-    trackingRecHits=cms.InputTag("trackingRecHitsSoACollection"),
-    candidateInput=cms.InputTag("candidateDataSoA"),     # Connect to HelperSplitter output
-    zVertex=cms.InputTag("zVertex"),
+    siPixelClusters=cms.InputTag("siPixelClustersPreSplittingAlpaka"),
+    siPixelDigis=cms.InputTag("siPixelClustersPreSplittingAlpaka"),
+    trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka"),
+    candidateInput=cms.InputTag("candidateDataSoA"),
+    zVertex=cms.InputTag("pixelVerticesAlpaka"),
     geometryInput=cms.InputTag("ClusterGeometrySoA"),
     verbose=cms.bool(True),
 )
 
 process.HelperSplitter_step = cms.Path(process.HelperSplitter)
+process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplittingAlpaka)
+process.siPixelRecHitsPreSplitting_step = cms.Path(process.siPixelRecHitsPreSplittingAlpaka)
+process.pixelVertexing_step = cms.Path(process.recopixelvertexing)
 process.trial_step = cms.Path(process.trial)
 
 # Set the schedule so that HelperSplitter runs before trial
 process.schedule = cms.Schedule(
     process.HelperSplitter_step,
+    process.siPixelClustersPreSplitting_step,
+    process.siPixelRecHitsPreSplitting_step,
+    process.pixelVertexing_step,    
     process.trial_step
 )
 

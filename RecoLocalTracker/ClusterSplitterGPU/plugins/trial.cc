@@ -36,6 +36,7 @@
 #include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsDevice.h"
 #include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsHost.h"
 #include "DataFormats/TrackingRecHitSoA/interface/alpaka/TrackingRecHitsSoACollection.h"
+#include "DataFormats/TrackingRecHitSoA/interface/SiPixelHitStatus.h"
 
 #include "DataFormats/SiPixelDigiSoA/interface/SiPixelDigisDevice.h"
 #include "DataFormats/SiPixelDigiSoA/interface/SiPixelDigisHost.h"
@@ -165,7 +166,7 @@ trial::~trial() {
 }
 
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
-    std::cout << "Entering in produce method.. testing" << std::endl;  // Printout added here
+    if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
 
     // Ensure we're selecting the first available GPU device
     auto const& deviceList = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
