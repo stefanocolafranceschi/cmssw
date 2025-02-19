@@ -5,19 +5,25 @@ from Geometry.TrackerGeometryBuilder.trackerGeometry_cfi import *
 from Configuration.ProcessModifiers.alpaka_cff import alpaka
 process = cms.Process("RECOCC",alpaka)
 
+process.load('Configuration.StandardSequences.MagneticField_cff')
 process.load('Configuration.StandardSequences.Services_cff')
 process.load("Configuration.Geometry.GeometryRecoDB_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 process.load("RecoLocalTracker.SiPixelClusterizer.siPixelClustersPreSplitting_cff")
 process.load("RecoLocalTracker.SiStripClusterizer.SiStripClusterChargeCut_cfi")
 process.load("RecoLocalTracker.SiPixelRecHits.SiPixelRecHits_cfi")
-process.load("RecoTracker.Configuration.RecoPixelVertexing_cff")
+process.load("RecoLocalTracker.SiPixelRecHits.PixelCPEESProducers_cff")
+#process.load("RecoTracker.Configuration.RecoPixelVertexing_cff")
+process.load('Configuration.EventContent.EventContent_cff')
+#process.load('RecoVertex.BeamSpotProducer.BeamSpot_cff')
+process.load('RecoTracker.PixelTrackFitting.PixelTracks_cff')
+process.load('Configuration.StandardSequences.Reconstruction_cff')
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
 
 # HelperSplitter producer
-process.HelperSplitter = cms.EDProducer("HelperSplitter",
+process.candidateDataSoA = cms.EDProducer("HelperSplitter",
     Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
     siPixelClusters = cms.InputTag("siPixelClusters","","RECO"),
     ptMin = cms.double(0.5),
@@ -49,14 +55,16 @@ process.trial = cms.EDProducer(
     trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka"),
     candidateInput=cms.InputTag("candidateDataSoA"),
     zVertex=cms.InputTag("pixelVerticesAlpaka"),
-    geometryInput=cms.InputTag("ClusterGeometrySoA"),
+    geometryInput=cms.InputTag("candidateDataSoA"),
     verbose=cms.bool(True),
 )
 
-process.HelperSplitter_step = cms.Path(process.HelperSplitter)
+process.HelperSplitter_step = cms.Path(process.candidateDataSoA)
+process.offlineBeamSpotDevice_step = cms.Path(process.offlineBeamSpotDevice)
 process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplittingAlpaka)
 process.siPixelRecHitsPreSplitting_step = cms.Path(process.siPixelRecHitsPreSplittingAlpaka)
-process.pixelVertexing_step = cms.Path(process.recopixelvertexing)
+#process.pixelVertexing_step = cms.Path(process.recopixelvertexing)
+process.reconstruction_step1 = cms.Path(process.reconstruction_pixelTrackingOnly)
 process.trial_step = cms.Path(process.trial)
 
 # Set the schedule so that HelperSplitter runs before trial
@@ -64,7 +72,8 @@ process.schedule = cms.Schedule(
     process.HelperSplitter_step,
     process.siPixelClustersPreSplitting_step,
     process.siPixelRecHitsPreSplitting_step,
-    process.pixelVertexing_step,    
+    #process.pixelVertexing_step,  
+    process.reconstruction_step1,  
     process.trial_step
 )
 
@@ -76,9 +85,21 @@ process.source = cms.Source("PoolSource",
 )
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(10))
 
-process.output = cms.OutputModule("PoolOutputModule",
-    fileName = cms.untracked.string('file:step_output.root'),
-    outputCommands = cms.untracked.vstring("keep *_*_*_*")
+#process.output = cms.OutputModule("PoolOutputModule",
+#    fileName = cms.untracked.string('file:step_output.root'),
+#    outputCommands = cms.untracked.vstring("keep *_*_*_*")
+#)
+
+process.RECOSIMoutput = cms.OutputModule("PoolOutputModule",
+    dataset = cms.untracked.PSet(
+        dataTier = cms.untracked.string('GEN-SIM-RECO'),
+        filterName = cms.untracked.string('')
+    ),
+    fileName = cms.untracked.string('file:step4.root'),
+    outputCommands = process.RECOSIMEventContent.outputCommands,
+    splitLevel = cms.untracked.int32(0)
 )
-process.endpath = cms.EndPath(process.output)
+
+
+process.endpath = cms.EndPath(process.RECOSIMoutput)
 process.schedule.append(process.endpath)

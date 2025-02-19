@@ -102,8 +102,8 @@ HelperSplitter::HelperSplitter(const edm::ParameterSet& iConfig)
       tTrackerTopo_(esConsumes()),
       verbose_(iConfig.getParameter<bool>("verbose"))      
         {
-            produces<CandidatesHost>("candidateDataSoA");
-            produces<ClusterGeometrysHost>("ClusterGeometrySoA");
+            produces<CandidatesSoACollection>("candidateDataSoA");
+            produces<ClusterGeometrysSoACollection>("ClusterGeometrySoA");
         }
 
 HelperSplitter::~HelperSplitter() {
@@ -146,7 +146,7 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     if (verbose_) std::cout << "Queue done" << std::endl;
 
     // Create the CandidateSoA on CPU
-    CandidatesHost tkCandidates(nCandidates, queue);
+    CandidatesSoACollection tkCandidates(nCandidates, queue);
     auto candidateView = tkCandidates.view();
     if (verbose_) std::cout << "Candidates done" << std::endl;
 
@@ -188,7 +188,7 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     if (verbose_) std::cout << "TrackerGeometry/Topology got it" << std::endl;
 
     // Create the ClusterGeometrySoA on CPU
-    ClusterGeometrysHost tkCluster(nPixelClusters, queue);
+    ClusterGeometrysSoACollection tkCluster(nPixelClusters, queue);
     auto clusterView = tkCluster.view();
     if (verbose_) std::cout << "Cluster done" << std::endl;
 
@@ -215,11 +215,13 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     }
 
     // Put the CandidateSoA and ClusterGeometrySoA into the event
-    iEvent.put(std::make_unique<CandidatesHost>(std::move(tkCandidates)), "candidateDataSoA");
-    iEvent.put(std::make_unique<ClusterGeometrysHost>(std::move(tkCluster)), "ClusterGeometrySoA");
+    iEvent.put(std::make_unique<CandidatesSoACollection>(std::move(tkCandidates)), "candidateDataSoA");
+    iEvent.put(std::make_unique<ClusterGeometrysSoACollection>(std::move(tkCluster)), "ClusterGeometrySoA");
 
-    //iEvent.put(std::move(tkCandidates), "candidateDataSoA");
-    //iEvent.put(std::move(clusterDataSoA), "ClusterGeometrySoA");
+    //iEvent.put(std::make_unique<CandidatesHost>(std::move(tkCandidates)), "candidateDataSoA");
+    //iEvent.put(std::make_unique<ClusterGeometrysHost>(std::move(tkCluster)), "ClusterGeometrySoA");
+
+
 }
 
 
