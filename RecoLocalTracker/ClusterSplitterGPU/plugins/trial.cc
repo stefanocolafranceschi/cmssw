@@ -171,7 +171,6 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
     // Ensure we're selecting the first available GPU device
     auto const& deviceList = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
     if (deviceList.empty()) {
-        if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
         throw cms::Exception("Configuration") << "No available Alpaka GPU devices found!";
     }
 
@@ -190,6 +189,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
     auto const& candidates = deviceEvent.get(candidateToken_);
     auto const& clustergeometry = deviceEvent.get(geometryToken_);
 
+    if (verbose_) std::cout << "All Things retrievied..." << std::endl;
+
     // Use event ID as the offset
     int32_t eventOffset = deviceEvent.id().event();
     std::cout << "Event offset: " << eventOffset << std::endl;
@@ -207,6 +208,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         alpaka::memcpy(queue, moduleStartD, moduleStartH);
         alpaka::wait(queue);            // Ensure the data copy is complete
 
+        if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
 
         // ------------- CREATE DEVICE BUFFERS -------------------------------
 
@@ -215,7 +217,9 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                                                             TrackingRecHitHost (cpu)  */
         size_t nHits = recHits.nHits();
         TrackingRecHitsSoACollection<pixelTopology::Phase1> tkHit(queue, nHits, eventOffset, moduleStartD.data());
+        if (verbose_) std::cout << "TrackingRecHitsSoACollection done" << std::endl;
         //- - - - - - - - - - - - - - - - - - -
+
 
         /* Digis 
         the SiPixelDigisSoACollection is an alias for: SiPixelDigisDevice (gpu) or 
@@ -226,6 +230,9 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         size_t nDigis = digis.view().metadata().size();
         SiPixelDigisSoACollection tkDigi(nDigis, queue);
         tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
+        if (verbose_) std::cout << "SiPixelDigisSoACollection done" << std::endl;
+
+
         //- - - - - - - - - - - - - - - - - - -
 
         /* Clusters
@@ -233,6 +240,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                                                              SiPixelClustersHost (cpu)  */
         size_t nClusters = clusters.view().metadata().size();
         SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
+        if (verbose_) std::cout << "SiPixelClustersSoACollection done" << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -240,6 +248,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         size_t nCandidates = candidates.view().metadata().size();
         CandidatesSoACollection tkCandidates(nCandidates, queue);
         auto CandidatesdeviceView = tkCandidates.view();
+        if (verbose_) std::cout << "CandidatesSoACollection done" << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -247,6 +256,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         size_t ngeoClusters = clustergeometry.view().metadata().size();
         ClusterGeometrysSoACollection tkgeoclusters(ngeoClusters, queue);
         auto deviceView = tkgeoclusters.view();
+        if (verbose_) std::cout << "ClusterGeometrysSoACollection done" << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
         /* Vertices                    */
@@ -256,6 +266,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         /* SoA for the output                    */
         SiPixelDigisSoACollection tkOutputDigis(nDigis, queue);
         SiPixelClustersSoACollection tkOutputClusters(nClusters, queue);
+        if (verbose_) std::cout << "SoA for the output done" << std::endl;
 
         // ------------- COPY FROM HOST TO DEVICE BUFFERS -------------------------------
         // The output SoA are initialized with the input ones (in case no cluster will be split)
@@ -266,6 +277,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         alpaka::memcpy(queue, tkVertices.buffer(), zVertices.buffer());
         alpaka::memcpy(queue, tkCandidates.buffer(), candidates.buffer());
         alpaka::memcpy(queue, tkgeoclusters.buffer(), clustergeometry.buffer());
+        if (verbose_) std::cout << "Most memcpy done" << std::endl;
 
         // Handling the per cluster calculation attributes in a struct
         std::vector<clusterProperties> gpuAlgo;
@@ -273,13 +285,16 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         auto clusterPropertiesDevice = cms::alpakatools::make_device_buffer<clusterProperties[]>(queue, nClusters);
         std::copy(gpuAlgo.begin(), gpuAlgo.end(), clusterPropertiesHost.data());
         alpaka::memcpy(queue, clusterPropertiesDevice, clusterPropertiesHost);
+        if (verbose_) std::cout << "All memcpy done" << std::endl;
 
         // Handling a global counter of the output (new) clusters (initialized in the kernel)
         auto clusterCounterDevice = cms::alpakatools::make_device_buffer<uint32_t>(queue);
 
         alpaka::wait(queue);  // Ensure the transfer is complete
 
+
         // Execute the kernel
+        if (verbose_) std::cout << "About to start the kernel" << std::endl;
         Splitting::runKernels<pixelTopology::Phase1>(
             tkHit.view(), tkDigi.view(), tkClusters.view(), tkVertices.view(), tkCandidates.view(), 
             tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_, 

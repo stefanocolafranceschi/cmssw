@@ -3,6 +3,7 @@
 <use name="FWCore/ParameterSet"/>
 <use name="FWCore/PluginManager"/>
 <use name="alpaka"/>
+<use name="HeterogeneousCore/AlpakaCore"/>
 <use name="HeterogeneousCore/AlpakaInterface"/>
 <use name="DataFormats/Candidate"/>
 <use name="DataFormats/Math"/>

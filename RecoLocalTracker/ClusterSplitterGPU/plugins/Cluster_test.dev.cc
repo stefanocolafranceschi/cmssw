@@ -208,8 +208,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                  geoclusterView[g].tanLorentzAngles());
         }
 
-
-
       }
     };
 
@@ -243,12 +241,26 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       double forceXError_,
                                       double forceYError_) const {
 
+            printf("In the JetSplit...\n");
+
             // Initialize the clusterCounterDevice to 0 (only on thread 0)
-            auto threadIdx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);     
-            if (threadIdx == 0) clusterCounterDevice[0] = 0;
+            //auto threadIdx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);     
+            if (alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0] == 0 &&
+                alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0] == 0) {
+                clusterCounterDevice[0] = 0;
+                printf("Setting clusterCounterDevice[0] = 0\n");
+            }
+
+
+            auto threadIdx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
+            auto totalThreads = alpaka::getWorkDiv<alpaka::Grid, alpaka::Threads>(acc)[0];
 
             // Iterate over clusters
-            for (uint32_t clusterIdx : cms::alpakatools::uniform_elements(acc, clusterView.metadata().size())) {
+            //for (uint32_t clusterIdx : cms::alpakatools::uniform_elements(acc, clusterView.metadata().size())) {
+            //for (uint32_t clusterIdx = threadIdx; clusterIdx < static_cast<uint32_t>(clusterView.metadata().size()); clusterIdx += totalThreads) {
+            for (uint32_t clusterIdx = 0; clusterIdx < static_cast<uint32_t>(clusterView.metadata().size()); ++clusterIdx) {
+
+                printf("In the JetSplit... clusterIdx = %u\n", clusterIdx);
 
                 // Fetch the cluster's position and geometry
                 float pitchX = geoclusterView[clusterIdx].pitchX();
@@ -257,6 +269,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                 // Loop through all candidates (jets)
                 for (uint32_t candIdx : cms::alpakatools::uniform_elements(acc, candidateView.metadata().size())) {
+                    printf("In the JetSplit... candIdx = %u\n", candIdx);
+
                     const auto& jet = candidateView[candIdx];
 
                     // Skip low-pt jets
@@ -298,6 +312,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      forceYError_);
                     }
                 }
+                return;
             }
         }
 
@@ -365,7 +380,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 }
             }
         }
-
 
         template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>        
         ALPAKA_FN_ACC void splitCluster(TAcc const& acc,
@@ -670,7 +684,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 uint32_t groups = std::max({groupsHits, groupsDigis, groupsClusters});
 
                 auto workDiv = make_workdiv<Acc1D>(groups, items);
-
+        
+                std::cout << "In the kernel..." << std::endl;
                 // Kernel executions
                 //alpaka::exec<Acc1D>(queue, workDiv, Printout<TrackerTraits>{}, hitView, digiView, clusterView, vertexView, candidateView, geoclusterView);
                 alpaka::exec<Acc1D>(queue, 

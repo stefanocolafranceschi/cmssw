@@ -10,8 +10,16 @@
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/Framework/interface/ESHandle.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
-#include "FWCore/Utilities/interface/StreamID.h"
+
 #include "FWCore/Utilities/interface/stringize.h"
+#include "FWCore/Utilities/interface/EDGetToken.h"
+#include "FWCore/Utilities/interface/InputTag.h"
+#include "FWCore/Utilities/interface/StreamID.h"
+
+#include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
+#include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/Framework/interface/Frameworkfwd.h"
 
 #include "TFile.h"
 #include "TString.h"
@@ -67,7 +75,7 @@
 
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 
-class HelperSplitter : public edm::stream::EDProducer<> {
+class HelperSplitter : public global::EDProducer<> {
 public:
   explicit HelperSplitter(const edm::ParameterSet&);
   ~HelperSplitter() override;
@@ -75,9 +83,10 @@ public:
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
 private:
-  void beginStream(edm::StreamID) override;
-  void produce(edm::Event&, const edm::EventSetup&) override;
-  void endStream() override;
+  //void beginStream(edm::StreamID) override;
+  //void produce(edm::Event&, const edm::EventSetup&) override;
+  void produce(edm::StreamID sid, device::Event& event, device::EventSetup const& setup) const override;
+  //void endStream() override;
 
   const double ptMin_;
   float tanLorentzAngle_;
@@ -88,11 +97,13 @@ private:
   edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> const tTrackingGeom_;
   edm::ESGetToken<TrackerTopology, TrackerTopologyRcd> const tTrackerTopo_;
   bool verbose_;
-
+  const device::EDPutToken<CandidatesSoACollection> CandidatesSoACollection_;
+  const device::EDPutToken<ClusterGeometrysSoACollection> ClusterGeometrysSoACollection_;
 };
 
-HelperSplitter::HelperSplitter(const edm::ParameterSet& iConfig)
-    : ptMin_(iConfig.getParameter<double>("ptMin")),
+HelperSplitter::HelperSplitter(edm::ParameterSet const& iConfig)
+    : EDProducer<>(),
+      ptMin_(iConfig.getParameter<double>("ptMin")),
       tanLorentzAngle_(iConfig.getParameter<double>("tanLorentzAngle")),
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
       clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
@@ -100,60 +111,52 @@ HelperSplitter::HelperSplitter(const edm::ParameterSet& iConfig)
       candidateToken_(consumes<edm::View<reco::Candidate>>(iConfig.getParameter<edm::InputTag>("Candidate"))),
       tTrackingGeom_(esConsumes()),
       tTrackerTopo_(esConsumes()),
-      verbose_(iConfig.getParameter<bool>("verbose"))      
-        {
-            produces<CandidatesSoACollection>("candidateDataSoA");
-            produces<ClusterGeometrysSoACollection>("ClusterGeometrySoA");
-        }
+      verbose_(iConfig.getParameter<bool>("verbose")),
+      CandidatesSoACollection_{produces()},
+      ClusterGeometrysSoACollection_{produces()}
+        {}
+
 
 HelperSplitter::~HelperSplitter() {
 }
 
-void HelperSplitter::beginStream(edm::StreamID) {
-}
+//void HelperSplitter::beginStream(edm::StreamID) {
+//}
 
-void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
-
+//void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::EventSetup const& iSetup) const {
     printf("*********************************Starting the HelperSplitter producer.\n");
-    //std::cerr << "\n\n\n*************** HELPER SPLITTER IS RUNNING ***************\n\n\n";
 
-    // Candidate is used for retrieving the jets
-    edm::Handle<edm::View<reco::Candidate>> candidatesHandle;
-    iEvent.getByToken(candidateToken_, candidatesHandle);
-    if (!candidatesHandle.isValid()) {
-        edm::LogError("HelperSplitter") << "Could not retrieve Candidate";
-        return;
-    }
+    auto const& candidates = iEvent.get(candidateToken_);
 
     // Process Candidates
-    size_t nCandidates = candidatesHandle->size();
-    if (verbose_) {
-        std::cout << "Number of Candidates: " << nCandidates << std::endl;
-    }
+    size_t nCandidates = candidates.size();
+    if (verbose_) std::cout << "Number of Candidates: " << nCandidates << std::endl;
 
     // Count the number of valid candidates that pass the ptMin_ filter
     size_t validCandidatesCount = 0;
-    for (const auto& candidate : *candidatesHandle) {
+    for (const auto& candidate : candidates) {
         if (candidate.pt() > ptMin_) {
             ++validCandidatesCount;
         }
     }
     if (verbose_) std::cout << "Number of valid Candidates: " << validCandidatesCount << std::endl;
 
-    // Create the queue for the CPU device
-    auto const& device = cms::alpakatools::devices<Platform>()[0];
+    // Create the queue for the (now GPU) device
+    auto const& device = cms::alpakatools::devices<alpaka::PlatformCudaRt>()[0];
     Queue queue(device);
     if (verbose_) std::cout << "Queue done" << std::endl;
 
-    // Create the CandidateSoA on CPU
-    CandidatesSoACollection tkCandidates(nCandidates, queue);
+    // Create the CandidateSoA on the host (tkCandidates)
+    CandidatesHost tkCandidates(nCandidates, queue);
+
     auto candidateView = tkCandidates.view();
     if (verbose_) std::cout << "Candidates done" << std::endl;
 
-    // Fill the CandidateSoA
+    // Fill the CandidateSoA on the host
     size_t candidateIndex = 0;
-    for (const auto& candidate : *candidatesHandle) {
-        if (candidate.pt() > ptMin_) {  // Apply the ptMin_ filter
+    for (const auto& candidate : candidates) {
+        if (candidate.pt() > ptMin_) {
             candidateView.px(candidateIndex) = static_cast<float>(candidate.px());
             candidateView.py(candidateIndex) = static_cast<float>(candidate.py());
             candidateView.pz(candidateIndex) = static_cast<float>(candidate.pz());
@@ -163,24 +166,23 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
             ++candidateIndex;
         }
     }
-    if (verbose_) std::cout << "Done with Candidates" << std::endl;
+    if (verbose_) std::cout << "Done with Candidates (cpu)" << std::endl;
 
-    // SiPixelClusters is used to get the geometry of each cluster
-    edm::Handle<edmNew::DetSetVector<SiPixelCluster>> inputPixelClustersHandle;
-    iEvent.getByToken(clusterToken_, inputPixelClustersHandle);
-    if (!inputPixelClustersHandle.isValid()) {
-        edm::LogError("HelperSplitter") << "Could not retrieve siPixelClusters.";
-        return;
-    }
+    // Produce a device–resident copy, allocating a device candidate collection
+    CandidatesSoACollection tkCandidatesDevice(nCandidates, queue);
+
+    // Copy from the host candidate collection to the device one.
+    alpaka::memcpy(queue, tkCandidatesDevice.buffer(), tkCandidates.buffer());
+    alpaka::wait(queue);
+    if (verbose_) std::cout << "Copied CandidateSoA to device" << std::endl;
+
+
+    auto const& PixelClusters = iEvent.get(clusterToken_);
     if (verbose_) std::cout << "siPixelClusters got it" << std::endl;
 
-
-    // Process inputPixelClustersHandle
-    size_t nPixelClusters = inputPixelClustersHandle->size();
-    if (verbose_) {
-        std::cout << "Number of Pixels: " << nPixelClusters << std::endl;
-    }
-    
+    // Process clusterToken_
+    size_t nPixelClusters = PixelClusters.size();
+    if (verbose_) std::cout << "Number of Pixels: " << nPixelClusters << std::endl;
 
     // Retrieve TrackerGeometry, trackerTopology from EventSetup
     const auto& trackingGeometry = iSetup.getData(tTrackingGeom_);
@@ -188,46 +190,52 @@ void HelperSplitter::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
     if (verbose_) std::cout << "TrackerGeometry/Topology got it" << std::endl;
 
     // Create the ClusterGeometrySoA on CPU
-    ClusterGeometrysSoACollection tkCluster(nPixelClusters, queue);
+    ClusterGeometrysHost tkCluster(nPixelClusters, queue);
+
     auto clusterView = tkCluster.view();
     if (verbose_) std::cout << "Cluster done" << std::endl;
 
-    for (auto detIt = inputPixelClustersHandle->begin(); detIt != inputPixelClustersHandle->end(); ++detIt) {
-        const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
-        const GeomDet* det = trackingGeometry.idToDet(detset.id());
-        if (!det) continue;
+    for (auto detIt = PixelClusters.begin(); detIt != PixelClusters.end(); ++detIt) {
+      const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
+      const GeomDet* det = trackingGeometry.idToDet(detset.id());
+      if (!det) continue;
 
-        const PixelTopology& topo = static_cast<const PixelTopology&>(det->topology());
-        float pitchX, pitchY;
-        std::tie(pitchX, pitchY) = topo.pitch();
-        float thickness = det->surface().bounds().thickness();
-        float tanLorentzAngle = tanLorentzAngle_;
+      const PixelTopology& topo = static_cast<const PixelTopology&>(det->topology());
+      float pitchX, pitchY;
+      std::tie(pitchX, pitchY) = topo.pitch();
+      float thickness = det->surface().bounds().thickness();
+      float tanLorentzAngle = tanLorentzAngle_;
 
-        size_t clusterIndex = 0;
-        for (const auto& cluster : detset) {
-            clusterView.clusterIds(clusterIndex) = detset.id();
-            clusterView.pitchX(clusterIndex) = pitchX;
-            clusterView.pitchY(clusterIndex) = pitchY;
-            clusterView.thickness(clusterIndex) = thickness;
-            clusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
-            ++clusterIndex;
-        }
+      size_t clusterIndex = 0;
+      // Loop over clusters in this DetSet
+      for (const auto& cluster : detset) {
+        clusterView.clusterIds(clusterIndex) = detset.id();
+        clusterView.pitchX(clusterIndex) = pitchX;
+        clusterView.pitchY(clusterIndex) = pitchY;
+        clusterView.thickness(clusterIndex) = thickness;
+        clusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
+        ++clusterIndex;
+      }
     }
+    if (verbose_) std::cout << "Done with siPixelClusters (cpu)" << std::endl;
 
-    // Put the CandidateSoA and ClusterGeometrySoA into the event
-    iEvent.put(std::make_unique<CandidatesSoACollection>(std::move(tkCandidates)), "candidateDataSoA");
-    iEvent.put(std::make_unique<ClusterGeometrysSoACollection>(std::move(tkCluster)), "ClusterGeometrySoA");
+    // Produce a device–resident copy, allocating a device candidate collection
+    ClusterGeometrysSoACollection tkClusterGeometryDevice(nPixelClusters, queue);
 
-    //iEvent.put(std::make_unique<CandidatesHost>(std::move(tkCandidates)), "candidateDataSoA");
-    //iEvent.put(std::make_unique<ClusterGeometrysHost>(std::move(tkCluster)), "ClusterGeometrySoA");
+    // Copy from the host candidate collection to the device one.
+    alpaka::memcpy(queue, tkClusterGeometryDevice.buffer(), tkCluster.buffer());
+    alpaka::wait(queue);
+    if (verbose_) std::cout << "Copied CandidateSoA to device" << std::endl;
 
-
+    // produce output
+    iEvent.emplace(CandidatesSoACollection_, std::move(tkCandidatesDevice));
+    iEvent.emplace(ClusterGeometrysSoACollection_, std::move(tkClusterGeometryDevice));
 }
 
 
-void HelperSplitter::endStream() {
-  edm::LogInfo("HelperSplitter") << "Processing completed.";
-}
+//void HelperSplitter::endStream() {
+//  edm::LogInfo("HelperSplitter") << "Processing completed.";
+//}
 
 void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
 
