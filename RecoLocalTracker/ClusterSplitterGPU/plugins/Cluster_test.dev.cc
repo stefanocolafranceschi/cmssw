@@ -241,41 +241,40 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       double forceXError_,
                                       double forceYError_) const {
 
-            printf("In the JetSplit...\n");
+            // Get thread and grid indices
+            auto threadIdx = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0]; // Thread index within the block
+            auto blockIdx  = alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0];   // Block index
+            auto blockDim  = alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0]; // Threads per block
 
-            // Initialize the clusterCounterDevice to 0 (only on thread 0)
-            //auto threadIdx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc);     
-            if (alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0] == 0 &&
-                alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0] == 0) {
-                clusterCounterDevice[0] = 0;
-                printf("Setting clusterCounterDevice[0] = 0\n");
-            }
+            // Compute the global thread ID
+            uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
 
+            // Get total Clusters and Candidates
+            uint32_t numClusters = static_cast<uint32_t>(geoclusterView.metadata().size());
+            uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
 
-            auto threadIdx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];
-            auto totalThreads = alpaka::getWorkDiv<alpaka::Grid, alpaka::Threads>(acc)[0];
+            // Ensure only valid threads process clusters
+            if (globalThreadId < numClusters) {
+                uint32_t clusterIdx = globalThreadId; // Each thread handles exactly one cluster
+                uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
 
-            // Iterate over clusters
-            //for (uint32_t clusterIdx : cms::alpakatools::uniform_elements(acc, clusterView.metadata().size())) {
-            //for (uint32_t clusterIdx = threadIdx; clusterIdx < static_cast<uint32_t>(clusterView.metadata().size()); clusterIdx += totalThreads) {
-            for (uint32_t clusterIdx = 0; clusterIdx < static_cast<uint32_t>(clusterView.metadata().size()); ++clusterIdx) {
+                for (uint32_t candIdx = 0; candIdx < numCandidates; ++candIdx) {
+                    //printf("Processing Cluster: %u, Candidate: %u/%u Block index: %u, Threads per block: %u, Total threads: %u\n",
+                    //    clusterIdx, candIdx, numCandidates-1, blockIdx, blockDim, blockDim * alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0]);
 
-                printf("In the JetSplit... clusterIdx = %u\n", clusterIdx);
+                    // Debugging Candidate to be compared to the one originated in the other producer
+                    //double testme = static_cast<double>(candidateView[candIdx].px());
+                    //printf("Candidate %u px= %f \n", candIdx, testme);   
 
-                // Fetch the cluster's position and geometry
-                float pitchX = geoclusterView[clusterIdx].pitchX();
-                float pitchY = geoclusterView[clusterIdx].pitchY();
-                float thickness = geoclusterView[clusterIdx].thickness();
-
-                // Loop through all candidates (jets)
-                for (uint32_t candIdx : cms::alpakatools::uniform_elements(acc, candidateView.metadata().size())) {
-                    printf("In the JetSplit... candIdx = %u\n", candIdx);
+                    // Fetch the cluster's position and geometry
+                    float pitchX = geoclusterView[clusterIdx].pitchX();
+                    float pitchY = geoclusterView[clusterIdx].pitchY();
+                    float thickness = geoclusterView[clusterIdx].thickness();
 
                     const auto& jet = candidateView[candIdx];
 
                     // Skip low-pt jets
-                    if (jet.pt() < ptMin_)
-                        continue;
+                    if (jet.pt() < ptMin_) continue;
 
                     // Extract jet direction components
                     float jetPx = jet.px();
@@ -289,6 +288,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Check deltaR condition and split clusters if applicable
                     if (deltaR < deltaR_) {
+                        printf("Calling splitCluster --------->");
+                        /*
                         splitCluster(acc,
                                      hitView,
                                      digiView,
@@ -310,9 +311,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      clusterCounterDevice,
                                      forceXError_,
                                      forceYError_);
+                        */
                     }
+                    else {
+                        printf("Saving the cluster the way it was (no need to split)");
+                    }
+
                 }
-                return;
             }
         }
 
@@ -404,6 +409,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         double forceXError_,
                                         double forceYError_) const {
 
+            printf("In the splitCluster...");
+
             bool split = false;
             float jetTanAlpha = jetPx / jetPz;
             float jetTanBeta = jetPy / jetPz;
@@ -449,7 +456,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             outputDigi[idx].moduleId() = digiView[pixel].moduleId();
                         }
                     }
-                    return;                    
                 }
     
 
@@ -675,19 +681,28 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     double forceYError_,
                     Queue& queue) {
 
+    // Get the number of items per block (threads per block)
+    uint32_t items = 64;
 
-                uint32_t items = 64;
-                uint32_t groupsHits = divide_up_by(hitView.metadata().size(), items);
-                uint32_t groupsDigis = divide_up_by(digiView.metadata().size(), items);
-                uint32_t groupsClusters = divide_up_by(clusterView.metadata().size(), items);
+    // Calculate how many groups (blocks) you need for each view
+    uint32_t groupsClusters = divide_up_by(geoclusterView.metadata().size(), items);
 
-                uint32_t groups = std::max({groupsHits, groupsDigis, groupsClusters});
+    auto workDiv = make_workdiv<Acc1D>(groupsClusters, 64);
 
-                auto workDiv = make_workdiv<Acc1D>(groups, items);
-        
-                std::cout << "In the kernel..." << std::endl;
+    std::cout << "\nGot candidateView.metadata().size()=" << candidateView.metadata().size(); 
+    std::cout << "\nGot clusterView.metadata().size()=" << geoclusterView.metadata().size()
+          << "\nExecuting with "
+          << alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(workDiv)[0]
+          << " blocks and "
+          << alpaka::getWorkDiv<alpaka::Grid, alpaka::Threads>(workDiv)[0]
+          << " threads per block" << std::endl;
+
+
+    // Printout to verify the kernel launch configuration
+    std::cout << "In the kernel..." << std::endl;
+    // std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
+
                 // Kernel executions
-                //alpaka::exec<Acc1D>(queue, workDiv, Printout<TrackerTraits>{}, hitView, digiView, clusterView, vertexView, candidateView, geoclusterView);
                 alpaka::exec<Acc1D>(queue, 
                                     workDiv, 
                                     JetSplit<TrackerTraits>{}, 

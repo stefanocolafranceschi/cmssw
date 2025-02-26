@@ -217,7 +217,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                                                             TrackingRecHitHost (cpu)  */
         size_t nHits = recHits.nHits();
         TrackingRecHitsSoACollection<pixelTopology::Phase1> tkHit(queue, nHits, eventOffset, moduleStartD.data());
-        if (verbose_) std::cout << "TrackingRecHitsSoACollection done" << std::endl;
+        if (verbose_) std::cout << "TrackingRecHitsSoACollection done " << nHits << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -230,7 +230,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         size_t nDigis = digis.view().metadata().size();
         SiPixelDigisSoACollection tkDigi(nDigis, queue);
         tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
-        if (verbose_) std::cout << "SiPixelDigisSoACollection done" << std::endl;
+        if (verbose_) std::cout << "SiPixelDigisSoACollection done " << nDigis << std::endl;
 
 
         //- - - - - - - - - - - - - - - - - - -
@@ -240,7 +240,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                                                              SiPixelClustersHost (cpu)  */
         size_t nClusters = clusters.view().metadata().size();
         SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
-        if (verbose_) std::cout << "SiPixelClustersSoACollection done" << std::endl;
+        if (verbose_) std::cout << "SiPixelClustersSoACollection done " << nClusters << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -248,7 +248,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         size_t nCandidates = candidates.view().metadata().size();
         CandidatesSoACollection tkCandidates(nCandidates, queue);
         auto CandidatesdeviceView = tkCandidates.view();
-        if (verbose_) std::cout << "CandidatesSoACollection done" << std::endl;
+        if (verbose_) std::cout << "CandidatesSoACollection done " << nCandidates << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -256,7 +256,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         size_t ngeoClusters = clustergeometry.view().metadata().size();
         ClusterGeometrysSoACollection tkgeoclusters(ngeoClusters, queue);
         auto deviceView = tkgeoclusters.view();
-        if (verbose_) std::cout << "ClusterGeometrysSoACollection done" << std::endl;
+        if (verbose_) std::cout << "ClusterGeometrysSoACollection done " << ngeoClusters << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
         /* Vertices                    */
@@ -287,9 +287,9 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         alpaka::memcpy(queue, clusterPropertiesDevice, clusterPropertiesHost);
         if (verbose_) std::cout << "All memcpy done" << std::endl;
 
-        // Handling a global counter of the output (new) clusters (initialized in the kernel)
+        // Handling a global counter of the output (new) clusters (initialized to zero here)
         auto clusterCounterDevice = cms::alpakatools::make_device_buffer<uint32_t>(queue);
-
+        alpaka::memset(queue, clusterCounterDevice, 0);
         alpaka::wait(queue);  // Ensure the transfer is complete
 
 

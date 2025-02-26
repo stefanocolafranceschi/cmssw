@@ -83,7 +83,7 @@ process.schedule = cms.Schedule(
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring('file:step3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(10))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

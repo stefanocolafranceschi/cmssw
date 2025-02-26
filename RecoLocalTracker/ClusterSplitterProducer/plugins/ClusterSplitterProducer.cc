@@ -149,9 +149,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
 
     // Create the CandidateSoA on the host (tkCandidates)
     CandidatesHost tkCandidates(nCandidates, queue);
-
     auto candidateView = tkCandidates.view();
-    if (verbose_) std::cout << "Candidates done" << std::endl;
 
     // Fill the CandidateSoA on the host
     size_t candidateIndex = 0;
@@ -164,6 +162,13 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             candidateView.eta(candidateIndex) = static_cast<float>(candidate.eta());
             candidateView.phi(candidateIndex) = static_cast<float>(candidate.phi());
             ++candidateIndex;
+            if (verbose_) std::cout << "Candidate index=" << candidateIndex 
+                                                          << " px=" << static_cast<float>(candidate.px())
+                                                          << " py=" << static_cast<float>(candidate.py())
+                                                          << " pz=" << static_cast<float>(candidate.pz())
+                                                          << " pt=" << static_cast<float>(candidate.pt())
+                                                          << " eta=" << static_cast<float>(candidate.eta())
+                                                          << " eta=" << static_cast<float>(candidate.phi()) << std::endl;
         }
     }
     if (verbose_) std::cout << "Done with Candidates (cpu)" << std::endl;
@@ -171,18 +176,21 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     // Produce a device–resident copy, allocating a device candidate collection
     CandidatesSoACollection tkCandidatesDevice(nCandidates, queue);
 
+    if (verbose_) std::cout << "Overallocation check......"  << std::endl;
+    if (verbose_) std::cout << "on Host: Candidates should be " << nCandidates << std::endl;
+    if (verbose_) std::cout << "on Device: tkCandidatesDevice.size() = " << candidateView.metadata().size() << std::endl;
+
     // Copy from the host candidate collection to the device one.
     alpaka::memcpy(queue, tkCandidatesDevice.buffer(), tkCandidates.buffer());
     alpaka::wait(queue);
-    if (verbose_) std::cout << "Copied CandidateSoA to device" << std::endl;
-
+    if (verbose_) std::cout << "Copied CandidateSoA to device\n\n" << std::endl;
 
     auto const& PixelClusters = iEvent.get(clusterToken_);
     if (verbose_) std::cout << "siPixelClusters got it" << std::endl;
 
     // Process clusterToken_
     size_t nPixelClusters = PixelClusters.size();
-    if (verbose_) std::cout << "Number of Pixels: " << nPixelClusters << std::endl;
+    if (verbose_) std::cout << "Number of SiPixelClusters: " << nPixelClusters << std::endl;
 
     // Retrieve TrackerGeometry, trackerTopology from EventSetup
     const auto& trackingGeometry = iSetup.getData(tTrackingGeom_);
@@ -196,6 +204,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     if (verbose_) std::cout << "Cluster done" << std::endl;
 
     for (auto detIt = PixelClusters.begin(); detIt != PixelClusters.end(); ++detIt) {
+      //if (verbose_) std::cout << "Processing detIt, DetId: " << detIt->id() << ", Number of Clusters: " << detIt->size() << std::endl;
       const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
       const GeomDet* det = trackingGeometry.idToDet(detset.id());
       if (!det) continue;
@@ -215,6 +224,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
         clusterView.thickness(clusterIndex) = thickness;
         clusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
         ++clusterIndex;
+        //if (verbose_) std::cout << "Processing clusterIndex=" << clusterIndex << std::endl;
       }
     }
     if (verbose_) std::cout << "Done with siPixelClusters (cpu)" << std::endl;
@@ -226,6 +236,10 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     alpaka::memcpy(queue, tkClusterGeometryDevice.buffer(), tkCluster.buffer());
     alpaka::wait(queue);
     if (verbose_) std::cout << "Copied CandidateSoA to device" << std::endl;
+
+    if (verbose_) std::cout << "Overallocation check......"  << std::endl;
+    if (verbose_) std::cout << "on Host: SiPixelClusters should be " << nPixelClusters << std::endl;
+    if (verbose_) std::cout << "on Device: clusterView.size() = " << clusterView.metadata().size() << std::endl;
 
     // produce output
     iEvent.emplace(CandidatesSoACollection_, std::move(tkCandidatesDevice));
