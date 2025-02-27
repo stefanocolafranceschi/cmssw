@@ -288,8 +288,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Check deltaR condition and split clusters if applicable
                     if (deltaR < deltaR_) {
-                        printf("Calling splitCluster --------->");
-                        /*
+                        //printf("Calling splitCluster --------->");
+
                         splitCluster(acc,
                                      hitView,
                                      digiView,
@@ -311,7 +311,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      clusterCounterDevice,
                                      forceXError_,
                                      forceYError_);
-                        */
                     }
                     else {
                         printf("Saving the cluster the way it was (no need to split)");
@@ -426,7 +425,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             float expectedADC = std::sqrt(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
 
-
+return;
             if ( hitView[clusterIdx].chargeAndStatus().charge > expectedADC * chargeFracMin_ &&
                    (hitView[clusterIdx].clusterSizeX() > expSizeX + 1 || hitView[clusterIdx].clusterSizeY() > expSizeY + 1)) {
                 split = true;

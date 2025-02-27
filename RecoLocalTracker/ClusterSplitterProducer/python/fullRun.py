@@ -26,7 +26,7 @@ process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '
 process.candidateDataSoA = cms.EDProducer("HelperSplitter",
     Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
     siPixelClusters = cms.InputTag("siPixelClusters","","RECO"),
-    ptMin = cms.double(0.5),
+    ptMin = cms.double(50),
     tanLorentzAngle = cms.double(0.1),
     tanLorentzAngleBarrelLayer1 = cms.double(0.2),
     verbose = cms.bool(True)
@@ -37,7 +37,7 @@ process.trial = cms.EDProducer(
     "trial",
     nHits=cms.uint32(100),
     offset=cms.int32(10),
-    ptMin=cms.double(200),
+    ptMin=cms.double(50),
     deltaR=cms.double(0.05),
     chargeFracMin=cms.double(2.0),
     tanLorentzAngle=cms.double(0.02),
