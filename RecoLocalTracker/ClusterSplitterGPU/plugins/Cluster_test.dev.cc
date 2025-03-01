@@ -258,6 +258,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                 if (globalThreadId == 0) {
                     *clusterCounterDevice = 0;
+
                 }
 
                 uint32_t clusterIdx = globalThreadId; // Each thread handles exactly one cluster
@@ -377,11 +378,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
         ALPAKA_FN_ACC void secondDistScore(clusterProperties* clusterData) const {
             for (uint32_t pixelIdx = 0; pixelIdx < clusterData->pixelCounter; pixelIdx++) {
-                float minDist, secondMinDist;
-                // Call closestClusters to calculate minDist and secondMinDist for each pixel
-                closestClusters(clusterData, pixelIdx, minDist, secondMinDist);
-                clusterData->scoresIndices[pixelIdx] = pixelIdx;
-                clusterData->scoresValues[pixelIdx] = -secondMinDist;
+                if ( pixelIdx < maxPixels ) {
+                    float minDist, secondMinDist;
+                    // Call closestClusters to calculate minDist and secondMinDist for each pixel
+                    closestClusters(clusterData, pixelIdx, minDist, secondMinDist);
+                    clusterData->scoresIndices[pixelIdx] = pixelIdx;
+                    clusterData->scoresValues[pixelIdx] = -secondMinDist;
+                }
+                else {
+                    printf("ERROR@ secondDistScore: pixelIdx (%u) exceeds maxPixels (%d)\n", pixelIdx, maxPixels);
+                    return;
+                }
+
             }
         }
 
@@ -396,18 +404,30 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         }
 
         ALPAKA_FN_ACC void sortScores(clusterProperties* clusterData) const {
-            for (uint32_t i = 0; i < clusterData->pixelCounter - 1; i++) {
-                for (uint32_t j = 0; j < clusterData->pixelCounter - i - 1; j++) {
-                    if (clusterData->scoresValues[j] < clusterData->scoresValues[j + 1]) {  // Sort in descending order
-                        // Swap scoresValues
-                        float tempValue = clusterData->scoresValues[j];
-                        clusterData->scoresValues[j] = clusterData->scoresValues[j + 1];
-                        clusterData->scoresValues[j + 1] = tempValue;
+            printf("Pixel counter: %u\n", clusterData->pixelCounter);
 
-                        // Swap scoresIndices
-                        int tempIndex = clusterData->scoresIndices[j];
-                        clusterData->scoresIndices[j] = clusterData->scoresIndices[j + 1];
-                        clusterData->scoresIndices[j + 1] = tempIndex;
+            for (uint32_t i = 0; i < clusterData->pixelCounter - 1; i++) {
+                for (uint32_t j = 0; j < clusterData->pixelCounter - i - 2; j++) {
+
+                    if (j >= maxPixels-1) {
+                        printf("ERROR@ sortScores: j (%u) exceeds maxPixels (%d)\n", j, maxPixels);
+                        return;
+                    }
+
+                    else {
+                        //printf("clusterData->scoresValues: %u, %f\n", j, clusterData->scoresValues[j+1]);
+
+                        if (clusterData->scoresValues[j] < clusterData->scoresValues[j + 1]) {  // Sort in descending order
+                            // Swap scoresValues
+                            float tempValue = clusterData->scoresValues[j];
+                            clusterData->scoresValues[j] = clusterData->scoresValues[j + 1];
+                            clusterData->scoresValues[j + 1] = tempValue;
+
+                            // Swap scoresIndices
+                            int tempIndex = clusterData->scoresIndices[j];
+                            clusterData->scoresIndices[j] = clusterData->scoresIndices[j + 1];
+                            clusterData->scoresIndices[j + 1] = tempIndex;
+                        }
                     }
                 }
             }
@@ -491,9 +511,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 }
                 else {    
                     // Splitting the pixels and writing them for the current clusterIdx
-                    //for (uint32_t j : cms::alpakatools::uniform_elements(acc, digiView.metadata().size())) {
+
                     for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
-return;
+
+                        // Use atomicAdd to ensure pixels are added correctly to pixelCounter
+                        uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
 
                         // Check if the pixel belongs to the current cluster (clusterIdx)
                         if (static_cast<uint32_t>(digiView[j].clus()) == clusterIdx) {
@@ -505,18 +527,16 @@ return;
                             for (int k = 0; k < sub; k++) {
                                 if (k == sub - 1) perDiv = digiView[j].adc() - perDiv * k;  // Adjust for the last pixel
 
-                                // Use atomicAdd to ensure pixels are added correctly to pixelCounter
-                                uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
-
+                                //printf("Start - to write pixel %u to the new cluster %u \n", j, clusterIdx);
                                 // Write the new split pixels at the obtained index
                                 clusterPropertiesDevice[clusterIdx].pixel_X[idx] = digiView[j].xx(); // Copy x-coordinate from original pixel
                                 clusterPropertiesDevice[clusterIdx].pixel_Y[idx] = digiView[j].yy(); // Copy y-coordinate from original pixel
                                 clusterPropertiesDevice[clusterIdx].pixel_ADC[idx] = perDiv;       // Assign divided charge (ADC)
                                 clusterPropertiesDevice[clusterIdx].pixels[idx] = j;
+                                //printf("Finish - to write pixel %u to the new cluster %u \n", j, clusterIdx);
                             }
                         }
                     }
-
 
                     // Compute the initial values, set all distances and centers to -999
                     for (unsigned int j = 0; j < meanExp; j++) {
@@ -533,7 +553,8 @@ return;
                         remainingSteps--;
 
                         // Compute distances
-                        for (uint32_t j : cms::alpakatools::uniform_elements(acc, digiView.metadata().size())) {
+                        for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
+
                             if (j >= maxPixels) continue; // Safety check for bounds
 
                             for (unsigned int i = 0; i < meanExp; i++) {
@@ -561,7 +582,9 @@ return;
                             }
                         }
 
+
                         secondDistScore(clusterPropertiesDevice);
+                        
                         // In the original code:
                         // - the first index is the distance, in whatever metrics we use, 
                         // - the second is the pixel index w.r.t which the distance is computed.
@@ -569,121 +592,149 @@ return;
                         // In this code the first index is in scoresIndices, the second in scoresValues
                         // to mimic the multimap, I score manually both arrays
                         sortScores(clusterPropertiesDevice);
-
-
                         
                         // Iterating over Scores Indices and Values
                         for (unsigned int i = 0; i < clusterPropertiesDevice[clusterIdx].pixelCounter; i++) {
+                            if (i< maxPixels) {
+                                int pixel_index = clusterPropertiesDevice[clusterIdx].scoresIndices[i];
+                                float score_value = clusterPropertiesDevice[clusterIdx].scoresValues[i];
 
-                            int pixel_index = clusterPropertiesDevice[clusterIdx].scoresIndices[i];
-                            float score_value = clusterPropertiesDevice[clusterIdx].scoresValues[i];
+                                int subpixel_counter = 0;
 
-                            int subpixel_counter = 0;
 
-                            // Iterating over subpixels
-                            for (unsigned int subpixel = 0; subpixel < clusterPropertiesDevice[clusterIdx].pixelCounter; subpixel++) {
-                                if (clusterPropertiesDevice[clusterIdx].pixels[subpixel] > pixel_index) {
-                                    break;
-                                } else if (clusterPropertiesDevice[clusterIdx].pixels[subpixel] != pixel_index) {
-                                    continue;
-                                } else {
-                                    float maxEst = 0;
-                                    int cl = -1;
+                                // Iterating over subpixels
+                                for (unsigned int subpixel = 0; subpixel < clusterPropertiesDevice[clusterIdx].pixelCounter; subpixel++) {
+                                    //
+                                    if (subpixel< maxPixels) {
 
-                                    // Iterating over subclusters to calculate the best fit
-                                    for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                                        float nsig = (clusterPropertiesDevice[clusterIdx].cls[subcluster_index] - expectedADC) /
-                                            (expectedADC * fractionalWidth_); 
-                                        float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f; 
-                                        float clDest = 1.f / (clusterPropertiesDevice[clusterIdx].distanceMap[pixel_index][subcluster_index] + 0.05f);
+                                        if (clusterPropertiesDevice[clusterIdx].pixels[subpixel] > pixel_index) {
+                                            break;
+                                        } else if (clusterPropertiesDevice[clusterIdx].pixels[subpixel] != pixel_index) {
+                                            continue;
+                                        } else {
+                                            float maxEst = 0;
+                                            int cl = -1;
 
-                                        float est = clQest * clDest;
-                                        if (est > maxEst) {
-                                            cl = subcluster_index;
-                                            maxEst = est;
+                                            // Iterating over subclusters to calculate the best fit
+                                            for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
+                                                if (subcluster_index< maxSubClusters) {
+                                                    float nsig = (clusterPropertiesDevice[clusterIdx].cls[subcluster_index] - expectedADC) /
+                                                        (expectedADC * fractionalWidth_); 
+                                                    float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f; 
+                                                    float clDest = 1.f / (clusterPropertiesDevice[clusterIdx].distanceMap[pixel_index][subcluster_index] + 0.05f);
+
+                                                    float est = clQest * clDest;
+                                                    if (est > maxEst) {
+                                                        cl = subcluster_index;
+                                                        maxEst = est;
+                                                        //printf("cl = %d",cl);
+                                                    }
+                                                }
+                                            }
+
+                                            // Use atomicAdd to safely update cls
+                                            //if (cl < maxSubClusters -1 ) {
+                                            if (cl >= 0 && cl < maxSubClusters-1) {
+
+                                                uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].cls[cl]), static_cast<float>(clusterPropertiesDevice[clusterIdx].pixel_ADC[subpixel]));
+
+                                                // Updating other cluster properties
+                                                clusterPropertiesDevice[clusterIdx].clusterForPixel[subpixel_counter] = cl;
+                                                clusterPropertiesDevice[clusterIdx].weightOfPixel[subpixel_counter] = maxEst;
+                                                subpixel_counter++;
+                                            }
                                         }
+
                                     }
-
-                                    // Use atomicAdd to safely update cls
-                                    uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].cls[cl]), static_cast<float>(clusterPropertiesDevice[clusterIdx].pixel_ADC[subpixel]));
-
-                                    // Updating other cluster properties
-                                    clusterPropertiesDevice[clusterIdx].clusterForPixel[subpixel_counter] = cl;
-                                    clusterPropertiesDevice[clusterIdx].weightOfPixel[subpixel_counter] = maxEst;
-                                    subpixel_counter++;
+                                    else {
+                                        //printf("ERROR iterating over scores indices and values exceeds maxPixels %u", 200);
+                                    }
                                 }
                             }
                         }
 
-
                         // Recompute cluster centers
                         stop = true;
                         for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                            if (std::abs(clusterPropertiesDevice[clusterIdx].clx[subcluster_index] - clusterPropertiesDevice[clusterIdx].oldclx[subcluster_index]) > 0.01f)
-                                stop = false; // still moving
-                            if (std::abs(clusterPropertiesDevice[clusterIdx].cly[subcluster_index] - clusterPropertiesDevice[clusterIdx].oldcly[subcluster_index]) > 0.01f)
-                                stop = false;
-                            clusterPropertiesDevice[clusterIdx].oldclx[subcluster_index] = clusterPropertiesDevice[clusterIdx].clx[subcluster_index];
-                            clusterPropertiesDevice[clusterIdx].oldcly[subcluster_index] = clusterPropertiesDevice[clusterIdx].cly[subcluster_index];
-                            clusterPropertiesDevice[clusterIdx].clx[subcluster_index] = 0;
-                            clusterPropertiesDevice[clusterIdx].cly[subcluster_index] = 0;
-                            clusterPropertiesDevice[clusterIdx].cls[subcluster_index] = 1e-99;
+                            if (subcluster_index < maxSubClusters-1) {
+                                if (std::abs(clusterPropertiesDevice[clusterIdx].clx[subcluster_index] - clusterPropertiesDevice[clusterIdx].oldclx[subcluster_index]) > 0.01f)
+                                    stop = false; // still moving
+                                if (std::abs(clusterPropertiesDevice[clusterIdx].cly[subcluster_index] - clusterPropertiesDevice[clusterIdx].oldcly[subcluster_index]) > 0.01f)
+                                    stop = false;
+                                clusterPropertiesDevice[clusterIdx].oldclx[subcluster_index] = clusterPropertiesDevice[clusterIdx].clx[subcluster_index];
+                                clusterPropertiesDevice[clusterIdx].oldcly[subcluster_index] = clusterPropertiesDevice[clusterIdx].cly[subcluster_index];
+                                clusterPropertiesDevice[clusterIdx].clx[subcluster_index] = 0;
+                                clusterPropertiesDevice[clusterIdx].cly[subcluster_index] = 0;
+                                clusterPropertiesDevice[clusterIdx].cls[subcluster_index] = 1e-99;
+                            }
                         }
 
                         for (unsigned int pixel_index = 0; pixel_index < clusterPropertiesDevice[clusterIdx].pixelCounter; pixel_index++) {
-                            if (clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index] < 0)
-                                continue;
+                            if (pixel_index < maxPixels-1) {
+                                if (clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index] < 0)
+                                    continue;
 
-                            clusterPropertiesDevice[clusterIdx].clx[clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index]] += clusterPropertiesDevice[clusterIdx].pixel_X[pixel_index] * clusterPropertiesDevice[clusterIdx].pixel_ADC[pixel_index];
-                            clusterPropertiesDevice[clusterIdx].cly[clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index]] += clusterPropertiesDevice[clusterIdx].pixel_Y[pixel_index] * clusterPropertiesDevice[clusterIdx].pixel_ADC[pixel_index];
-                            clusterPropertiesDevice[clusterIdx].cls[clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index]] += clusterPropertiesDevice[clusterIdx].pixel_ADC[pixel_index];
+                                clusterPropertiesDevice[clusterIdx].clx[clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index]] += clusterPropertiesDevice[clusterIdx].pixel_X[pixel_index] * clusterPropertiesDevice[clusterIdx].pixel_ADC[pixel_index];
+                                clusterPropertiesDevice[clusterIdx].cly[clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index]] += clusterPropertiesDevice[clusterIdx].pixel_Y[pixel_index] * clusterPropertiesDevice[clusterIdx].pixel_ADC[pixel_index];
+                                clusterPropertiesDevice[clusterIdx].cls[clusterPropertiesDevice[clusterIdx].clusterForPixel[pixel_index]] += clusterPropertiesDevice[clusterIdx].pixel_ADC[pixel_index];
+                            }
                         }
                         for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                            if (clusterPropertiesDevice[clusterIdx].cls[subcluster_index] != 0) {
-                                clusterPropertiesDevice[clusterIdx].clx[subcluster_index] /= clusterPropertiesDevice[clusterIdx].cls[subcluster_index];
-                                clusterPropertiesDevice[clusterIdx].cly[subcluster_index] /= clusterPropertiesDevice[clusterIdx].cls[subcluster_index];
+                            if (subcluster_index < maxSubClusters-1) {                            
+                                if (clusterPropertiesDevice[clusterIdx].cls[subcluster_index] != 0) {
+                                    clusterPropertiesDevice[clusterIdx].clx[subcluster_index] /= clusterPropertiesDevice[clusterIdx].cls[subcluster_index];
+                                    clusterPropertiesDevice[clusterIdx].cly[subcluster_index] /= clusterPropertiesDevice[clusterIdx].cls[subcluster_index];
+                                }
+                                clusterPropertiesDevice[clusterIdx].cls[subcluster_index] = 0;
                             }
-                            clusterPropertiesDevice[clusterIdx].cls[subcluster_index] = 0;
                         }
                     }
 
                     // accumulate pixel with same cl
                     for (int cl = 0; cl < (int) meanExp; cl++) {
                         for (unsigned int j = 0; j < clusterPropertiesDevice[clusterIdx].pixelCounter; j++) {
-                            if (clusterPropertiesDevice[clusterIdx].clusterForPixel[j] == cl and clusterPropertiesDevice[clusterIdx].pixel_ADC[j] != 0) {
+                            if (j < maxPixels) {                            
+                                if (clusterPropertiesDevice[clusterIdx].clusterForPixel[j] == cl and clusterPropertiesDevice[clusterIdx].pixel_ADC[j] != 0) {
 
-                                // cl find the other pixels
-                                // with same x,y and
-                                // accumulate+reset their adc
-                                for (unsigned int k = j + 1; k < clusterPropertiesDevice[clusterIdx].pixelCounter; k++) {
-                                    if (clusterPropertiesDevice[clusterIdx].pixel_ADC[k] != 0 and clusterPropertiesDevice[clusterIdx].pixel_X[k] == clusterPropertiesDevice[clusterIdx].pixel_X[j] and clusterPropertiesDevice[clusterIdx].pixel_Y[k] == clusterPropertiesDevice[clusterIdx].pixel_Y[j] and clusterPropertiesDevice[clusterIdx].clusterForPixel[k] == cl) {
-                                        clusterPropertiesDevice[clusterIdx].pixel_ADC[j] += clusterPropertiesDevice[clusterIdx].pixel_ADC[k];
-                                        clusterPropertiesDevice[clusterIdx].pixel_ADC[k] = 0;
+                                    // cl find the other pixels
+                                    // with same x,y and
+                                    // accumulate+reset their adc
+                                    for (unsigned int k = j + 1; k < clusterPropertiesDevice[clusterIdx].pixelCounter; k++) {
+                                        if (k < maxPixels) {                            
+                                            if (clusterPropertiesDevice[clusterIdx].pixel_ADC[k] != 0 and clusterPropertiesDevice[clusterIdx].pixel_X[k] == clusterPropertiesDevice[clusterIdx].pixel_X[j] and clusterPropertiesDevice[clusterIdx].pixel_Y[k] == clusterPropertiesDevice[clusterIdx].pixel_Y[j] and clusterPropertiesDevice[clusterIdx].clusterForPixel[k] == cl) {
+                                                clusterPropertiesDevice[clusterIdx].pixel_ADC[j] += clusterPropertiesDevice[clusterIdx].pixel_ADC[k];
+                                                clusterPropertiesDevice[clusterIdx].pixel_ADC[k] = 0;
+                                            }
+                                        }
                                     }
+
+                                    //increase pixelsForClCounter and copy pixels into pixelsForCl
+                                    uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelsForClCounter), uint32_t(1));
+
+                                    clusterPropertiesDevice[clusterIdx].pixelsForCl_X[cl] = clusterPropertiesDevice[clusterIdx].pixel_X[j];
+                                    clusterPropertiesDevice[clusterIdx].pixelsForCl_Y[cl] = clusterPropertiesDevice[clusterIdx].pixel_Y[j];
+                                    clusterPropertiesDevice[clusterIdx].pixelsForCl_ADC[cl] = clusterPropertiesDevice[clusterIdx].pixel_ADC[j];
                                 }
-
-                                //increase pixelsForClCounter and copy pixels into pixelsForCl
-                                uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelsForClCounter), uint32_t(1));
-
-                                clusterPropertiesDevice[clusterIdx].pixelsForCl_X[cl] = clusterPropertiesDevice[clusterIdx].pixel_X[j];
-                                clusterPropertiesDevice[clusterIdx].pixelsForCl_Y[cl] = clusterPropertiesDevice[clusterIdx].pixel_Y[j];
-                                clusterPropertiesDevice[clusterIdx].pixelsForCl_ADC[cl] = clusterPropertiesDevice[clusterIdx].pixel_ADC[j];
                             }
                         }
                     }
 
                     for (int cl = 0; cl < (int) meanExp; cl++) {
                         uint32_t idx = alpaka::atomicAdd(acc, clusterCounterDevice, uint32_t(1));
-                        printf("writing sub-cluster %u", idx);
-                        for (unsigned int j = 0; j < clusterPropertiesDevice[clusterIdx].pixelsForClCounter; j++) {
-                            outputDigi[idx].clus() = idx;    // it was clusterIdx (double check this)
-                            outputDigi[idx].xx() = clusterPropertiesDevice[cl].pixelsForCl_X[j];
-                            outputDigi[idx].yy() = clusterPropertiesDevice[cl].pixelsForCl_Y[j];
-                            outputDigi[idx].adc() = clusterPropertiesDevice[cl].pixelsForCl_ADC[j];
-                            outputDigi[idx].rawIdArr() = 0; // Copy raw ID from original pixel
-                            outputDigi[idx].moduleId() = 0; // Copy module ID from original pixel
-                            printf("Pixel = %u", j);
-                            printf(" adc = %u", static_cast<uint32_t>(clusterPropertiesDevice[cl].pixelsForCl_ADC[j]));
+                        //printf("writing sub-cluster %u", idx);
+                        if (idx < static_cast<uint32_t>(outputDigi.metadata().size())) {
+                            for (unsigned int j = 0; j < clusterPropertiesDevice[clusterIdx].pixelsForClCounter; j++) {
+                                if (j < maxPixels-1) {
+                                    outputDigi[idx].clus() = idx;    // it was clusterIdx (double check this)
+                                    outputDigi[idx].xx() = clusterPropertiesDevice[cl].pixelsForCl_X[j];
+                                    outputDigi[idx].yy() = clusterPropertiesDevice[cl].pixelsForCl_Y[j];
+                                    outputDigi[idx].adc() = clusterPropertiesDevice[cl].pixelsForCl_ADC[j];
+                                    outputDigi[idx].rawIdArr() = 0; // Copy raw ID from original pixel
+                                    outputDigi[idx].moduleId() = 0; // Copy module ID from original pixel
+                                    //printf("Pixel = %u", j);
+                                    //printf(" adc = %u", static_cast<uint32_t>(clusterPropertiesDevice[cl].pixelsForCl_ADC[j]));
+                                }
+                            }
                         }            
                     }
                 }
