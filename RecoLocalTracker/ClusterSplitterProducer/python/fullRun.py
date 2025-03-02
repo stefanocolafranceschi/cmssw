@@ -26,9 +26,9 @@ process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '
 process.candidateDataSoA = cms.EDProducer("HelperSplitter",
     Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
     siPixelClusters = cms.InputTag("siPixelClusters","","RECO"),
-    ptMin = cms.double(50),
-    tanLorentzAngle = cms.double(0.1),
-    tanLorentzAngleBarrelLayer1 = cms.double(0.2),
+    ptMin = cms.double(200),
+    tanLorentzAngle = cms.double(0.001),
+    tanLorentzAngleBarrelLayer1 = cms.double(0.001),
     verbose = cms.bool(True)
 )
 
@@ -37,14 +37,14 @@ process.trial = cms.EDProducer(
     "trial",
     nHits=cms.uint32(100),
     offset=cms.int32(10),
-    ptMin=cms.double(2),
-    deltaR=cms.double(100.05),
+    ptMin=cms.double(200),
+    deltaR=cms.double(0.05),
     chargeFracMin=cms.double(2.0),
-    tanLorentzAngle=cms.double(0.02),
-    tanLorentzAngleBarrelLayer1=cms.double(0.015),
-    expSizeXAtLorentzAngleIncidence=cms.double(0.1),
-    expSizeXDeltaPerTanAlpha=cms.double(0.02),
-    expSizeYAtNormalIncidence=cms.double(0.1),
+    tanLorentzAngle=cms.double(0.001),
+    tanLorentzAngleBarrelLayer1=cms.double(0.001),
+    expSizeXAtLorentzAngleIncidence=cms.double(1.5),
+    expSizeXDeltaPerTanAlpha=cms.double(0.001),
+    expSizeYAtNormalIncidence=cms.double(1.3),
     centralMIPCharge=cms.double(26000),
     chargePerUnit=cms.double(2000),
     forceXError=cms.double(100),
@@ -83,7 +83,7 @@ process.schedule = cms.Schedule(
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring('file:step3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1000))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

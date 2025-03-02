@@ -296,7 +296,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Check deltaR condition and split clusters if applicable
                     if (deltaR < deltaR_) {
-                        //printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
+                        printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
 
                         splitCluster(acc,
                                      hitView,
@@ -349,13 +349,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             }
         }
 
-        ALPAKA_FN_ACC void closestClusters(clusterProperties* clusterData, int pixelIdx, float& minDist, float& secondMinDist) const {
+        ALPAKA_FN_ACC void closestClusters(clusterProperties* clusterData, int pixelIdx, float& minDist, float& secondMinDist, unsigned meanExp) const {
             minDist = std::numeric_limits<float>::max();
             secondMinDist = std::numeric_limits<float>::max();
 
             // Loop over all sub-clusters to calculate distance for a specific pixel
-            for (uint32_t clusterIdx = 0; clusterIdx < maxSubClusters; clusterIdx++) {
-                float dist = clusterData->distanceMap[pixelIdx][clusterIdx];  // Access the distanceMap
+            for (uint32_t subClusterIdx = 0; subClusterIdx < meanExp; subClusterIdx++) {
+                float dist = clusterData->distanceMap[pixelIdx][subClusterIdx];  // Access the distanceMap
 
                 if (dist < minDist) {
                     secondMinDist = minDist;
@@ -366,22 +366,22 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             }
         }
 
-        ALPAKA_FN_ACC void secondDistDiffScore(clusterProperties* clusterData) const {
+        ALPAKA_FN_ACC void secondDistDiffScore(clusterProperties* clusterData, unsigned meanExp) const {
             for (uint32_t pixelIdx = 0; pixelIdx < clusterData->pixelCounter; pixelIdx++) {
                 float minDist, secondMinDist;
                 // Call closestClusters to calculate minDist and secondMinDist for each pixel
-                closestClusters(clusterData, pixelIdx, minDist, secondMinDist);
+                closestClusters(clusterData, pixelIdx, minDist, secondMinDist, meanExp);
                 clusterData->scoresIndices[pixelIdx] = pixelIdx;
                 clusterData->scoresValues[pixelIdx] = secondMinDist - minDist;
             }
         }
 
-        ALPAKA_FN_ACC void secondDistScore(clusterProperties* clusterData) const {
+        ALPAKA_FN_ACC void secondDistScore(clusterProperties* clusterData, unsigned meanExp) const {
             for (uint32_t pixelIdx = 0; pixelIdx < clusterData->pixelCounter; pixelIdx++) {
                 if ( pixelIdx < maxPixels ) {
                     float minDist, secondMinDist;
                     // Call closestClusters to calculate minDist and secondMinDist for each pixel
-                    closestClusters(clusterData, pixelIdx, minDist, secondMinDist);
+                    closestClusters(clusterData, pixelIdx, minDist, secondMinDist, meanExp);
                     clusterData->scoresIndices[pixelIdx] = pixelIdx;
                     clusterData->scoresValues[pixelIdx] = -secondMinDist;
                 }
@@ -393,11 +393,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             }
         }
 
-        ALPAKA_FN_ACC void distScore(clusterProperties* clusterData) const {
+        ALPAKA_FN_ACC void distScore(clusterProperties* clusterData, unsigned meanExp) const {
             for (uint32_t pixelIdx = 0; pixelIdx < clusterData->pixelCounter; pixelIdx++) {
                 float minDist, secondMinDist;
                 // Call closestClusters to calculate minDist and secondMinDist for each pixel
-                closestClusters(clusterData, pixelIdx, minDist, secondMinDist);
+                closestClusters(clusterData, pixelIdx, minDist, secondMinDist, meanExp);
                 clusterData->scoresIndices[pixelIdx] = pixelIdx;
                 clusterData->scoresValues[pixelIdx] = -minDist;
             }
@@ -490,6 +490,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Use atomicAdd to ensure pixels are added correctly
                     uint32_t idx = alpaka::atomicAdd(acc, clusterCounterDevice, uint32_t(1));
+                    printf("--------------------------");
                     printf("meanExp <= 1 writing cluster %u", idx);
 
                     // Iterate over all digis to find those belonging to the current cluster
@@ -504,9 +505,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             outputDigi[idx].rawIdArr() = digiView[pixel].rawIdArr();
                             outputDigi[idx].moduleId() = digiView[pixel].moduleId();
                             printf("Pixel = %u", pixel);
-                            printf(" adc = %u", static_cast<uint32_t>(digiView[pixel].adc()));
+                            printf(" adc = %u \n", static_cast<uint32_t>(digiView[pixel].adc()));
                         }
-                        printf("\n");
+                        printf("--------------------------\n");
                     }
                 }
                 else {    
@@ -514,11 +515,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
 
-                        // Use atomicAdd to ensure pixels are added correctly to pixelCounter
-                        uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
-
                         // Check if the pixel belongs to the current cluster (clusterIdx)
                         if (static_cast<uint32_t>(digiView[j].clus()) == clusterIdx) {
+
+                            // Use atomicAdd to ensure pixels are added correctly to pixelCounter
+                            uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
+
                             int sub = static_cast<int>(digiView[j].adc()) / chargePerUnit_ * expectedADC / centralMIPCharge_;
                             if (sub < 1) sub = 1;
                             int perDiv = digiView[j].adc() / sub;
@@ -560,7 +562,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             for (unsigned int i = 0; i < meanExp; i++) {
                                 if (i >= maxSubClusters) continue; // Safety check for bounds
 
-                                // Calculate the distance in X and Y for each cluster
+                                // Calculate the distance in X and Y for each pixel
                                 float distanceX = 1.f * digiView[j].xx() - clusterPropertiesDevice[clusterIdx].clx[i];
                                 float distanceY = 1.f * digiView[j].yy() - clusterPropertiesDevice[clusterIdx].cly[i];
                                 float dist = 0;
@@ -583,7 +585,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         }
 
 
-                        secondDistScore(clusterPropertiesDevice);
+                        secondDistScore(clusterPropertiesDevice, meanExp);
                         
                         // In the original code:
                         // - the first index is the distance, in whatever metrics we use, 
@@ -592,19 +594,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         // In this code the first index is in scoresIndices, the second in scoresValues
                         // to mimic the multimap, I score manually both arrays
                         sortScores(clusterPropertiesDevice);
-                        
+
                         // Iterating over Scores Indices and Values
                         for (unsigned int i = 0; i < clusterPropertiesDevice[clusterIdx].pixelCounter; i++) {
-                            if (i< maxPixels) {
+                            if (i < maxPixels) {
                                 int pixel_index = clusterPropertiesDevice[clusterIdx].scoresIndices[i];
                                 float score_value = clusterPropertiesDevice[clusterIdx].scoresValues[i];
 
                                 int subpixel_counter = 0;
 
-
                                 // Iterating over subpixels
                                 for (unsigned int subpixel = 0; subpixel < clusterPropertiesDevice[clusterIdx].pixelCounter; subpixel++) {
-                                    //
                                     if (subpixel< maxPixels) {
 
                                         if (clusterPropertiesDevice[clusterIdx].pixels[subpixel] > pixel_index) {
@@ -633,7 +633,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             }
 
                                             // Use atomicAdd to safely update cls
-                                            //if (cl < maxSubClusters -1 ) {
                                             if (cl >= 0 && cl < maxSubClusters-1) {
 
                                                 uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].cls[cl]), static_cast<float>(clusterPropertiesDevice[clusterIdx].pixel_ADC[subpixel]));
@@ -701,10 +700,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     // accumulate+reset their adc
                                     for (unsigned int k = j + 1; k < clusterPropertiesDevice[clusterIdx].pixelCounter; k++) {
                                         if (k < maxPixels) {                            
-                                            if (clusterPropertiesDevice[clusterIdx].pixel_ADC[k] != 0 and clusterPropertiesDevice[clusterIdx].pixel_X[k] == clusterPropertiesDevice[clusterIdx].pixel_X[j] and clusterPropertiesDevice[clusterIdx].pixel_Y[k] == clusterPropertiesDevice[clusterIdx].pixel_Y[j] and clusterPropertiesDevice[clusterIdx].clusterForPixel[k] == cl) {
-                                                clusterPropertiesDevice[clusterIdx].pixel_ADC[j] += clusterPropertiesDevice[clusterIdx].pixel_ADC[k];
-                                                clusterPropertiesDevice[clusterIdx].pixel_ADC[k] = 0;
-                                            }
+                                            if (clusterPropertiesDevice[clusterIdx].pixel_ADC[k] != 0 and 
+                                                clusterPropertiesDevice[clusterIdx].pixel_X[k] == clusterPropertiesDevice[clusterIdx].pixel_X[j] and 
+                                                clusterPropertiesDevice[clusterIdx].pixel_Y[k] == clusterPropertiesDevice[clusterIdx].pixel_Y[j] and 
+                                                clusterPropertiesDevice[clusterIdx].clusterForPixel[k] == cl) {
+                                                    clusterPropertiesDevice[clusterIdx].pixel_ADC[j] += clusterPropertiesDevice[clusterIdx].pixel_ADC[k];
+                                                    clusterPropertiesDevice[clusterIdx].pixel_ADC[k] = 0;
+                                                }
                                         }
                                     }
 
@@ -725,7 +727,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         if (idx < static_cast<uint32_t>(outputDigi.metadata().size())) {
                             for (unsigned int j = 0; j < clusterPropertiesDevice[clusterIdx].pixelsForClCounter; j++) {
                                 if (j < maxPixels-1) {
-                                    outputDigi[idx].clus() = idx;    // it was clusterIdx (double check this)
+                                    outputDigi[idx].clus() = idx;    // must be idx not clusterIdx
                                     outputDigi[idx].xx() = clusterPropertiesDevice[cl].pixelsForCl_X[j];
                                     outputDigi[idx].yy() = clusterPropertiesDevice[cl].pixelsForCl_Y[j];
                                     outputDigi[idx].adc() = clusterPropertiesDevice[cl].pixelsForCl_ADC[j];

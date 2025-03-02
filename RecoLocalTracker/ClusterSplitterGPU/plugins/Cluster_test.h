@@ -18,32 +18,37 @@
 
 #include <alpaka/alpaka.hpp>
 
+constexpr int maxSubClusters = 20;
 constexpr int maxPixels = 200;
-constexpr int maxSubClusters = 200;
 
 // This represent a per-cluster data needed in the Splitting algorithm
 struct clusterProperties {
+
+    // These are used to split original cluster into subclusters
     float clx[maxSubClusters];
     float cly[maxSubClusters];
     float cls[maxSubClusters];
     float oldclx[maxSubClusters];
     float oldcly[maxSubClusters];
 
-    uint32_t pixelCounter;                // how many pixels in this Cluster
-    float pixel_X[maxPixels];
-    float pixel_Y[maxPixels];
-    float pixel_ADC[maxPixels];
-    int pixels[maxPixels];              // Storing the index of the pixel
+    // These are used to store temporary pixel information
+    uint32_t pixelCounter;                // how many pixels in the cluster under study
+    float pixel_X[maxPixels];             // position
+    float pixel_Y[maxPixels];             // position
+    float pixel_ADC[maxPixels];           // adc value
+    int pixels[maxPixels];                // Storing the index of the pixel
 
-    uint32_t pixelsForClCounter;                // how many pixels in this Cluster
-    float pixelsForCl_X[maxPixels];
-    float pixelsForCl_Y[maxPixels];
-    float pixelsForCl_ADC[maxPixels];
+    // These are used for the final sub-cluster
+    uint32_t pixelsForClCounter;             // how many pixels in this Cluster
+    float pixelsForCl_X[maxPixels];          // position
+    float pixelsForCl_Y[maxPixels];          // position
+    float pixelsForCl_ADC[maxPixels];        // adc value
     int pixelsForCl[maxPixels];              // Storing the index of the pixel
 
+    // thse are used for k-map like algorithm and scoring
     float distanceMap[maxPixels][maxSubClusters];
-    int scoresIndices[maxPixels];
-    float scoresValues[maxPixels];
+    int scoresIndices[maxPixels];           // need this because can't to map
+    float scoresValues[maxPixels];          // need this because can't to map
 
     int clusterForPixel[maxPixels];
     float weightOfPixel[maxPixels];
