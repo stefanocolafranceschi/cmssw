@@ -229,9 +229,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
 
         size_t nDigis = digis.view().metadata().size();
         SiPixelDigisSoACollection tkDigi(nDigis, queue);
-        tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
+        //tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
         if (verbose_) std::cout << "SiPixelDigisSoACollection done " << nDigis << std::endl;
-
 
         //- - - - - - - - - - - - - - - - - - -
 

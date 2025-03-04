@@ -189,20 +189,31 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     if (verbose_) std::cout << "siPixelClusters got it" << std::endl;
 
     // Process clusterToken_
-    size_t nPixelClusters = PixelClusters.size();
-    if (verbose_) std::cout << "Number of SiPixelClusters: " << nPixelClusters << std::endl;
+    //size_t nPixelClusters = PixelClusters.size();
+    //if (verbose_) std::cout << "Number of SiPixelClusters: " << nPixelClusters << std::endl;
+
 
     // Retrieve TrackerGeometry, trackerTopology from EventSetup
     const auto& trackingGeometry = iSetup.getData(tTrackingGeom_);
     const auto& trackerTopology = iSetup.getData(tTrackerTopo_);
     if (verbose_) std::cout << "TrackerGeometry/Topology got it" << std::endl;
 
-    // Create the ClusterGeometrySoA on CPU
-    ClusterGeometrysHost tkCluster(nPixelClusters, queue);
 
+    // Calculate the total number of Clusters (to be used later in the cluster geo SoA)
+    int calculateNumberOfClusters = 0;
+    for (auto detIt = PixelClusters.begin(); detIt != PixelClusters.end(); ++detIt) {
+        calculateNumberOfClusters = calculateNumberOfClusters + detIt->size();
+    }
+    if (verbose_) std::cout << "Calculated " << calculateNumberOfClusters << " clusters" << std::endl;
+
+    // Create the ClusterGeometrySoA on CPU (and its view)
+    ClusterGeometrysHost tkCluster(calculateNumberOfClusters, queue);
     auto clusterView = tkCluster.view();
-    if (verbose_) std::cout << "Cluster done" << std::endl;
+    if (verbose_) std::cout << "Clusters done" << std::endl;
 
+
+    size_t clusterIndex = 0;
+    // Process all pixels and fill the clusterGeo SoA
     for (auto detIt = PixelClusters.begin(); detIt != PixelClusters.end(); ++detIt) {
       //if (verbose_) std::cout << "Processing detIt, DetId: " << detIt->id() << ", Number of Clusters: " << detIt->size() << std::endl;
       const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
@@ -215,30 +226,48 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
       float thickness = det->surface().bounds().thickness();
       float tanLorentzAngle = tanLorentzAngle_;
 
-      size_t clusterIndex = 0;
-      // Loop over clusters in this DetSet
+      // Extract local basis vectors from the detector surface
+      auto localX = det->surface().toLocal(GlobalVector(1, 0, 0)); // Local X-axis
+      auto localY = det->surface().toLocal(GlobalVector(0, 1, 0)); // Local Y-axis
+      auto localZ = det->surface().toLocal(GlobalVector(0, 0, 1)); // Local Z-axis
+
+      // Store the transformation coefficients
+      float transformXX = localX.x(), transformXY = localX.y(), transformXZ = localX.z();
+      float transformYX = localY.x(), transformYY = localY.y(), transformYZ = localY.z();
+      float transformZX = localZ.x(), transformZY = localZ.y(), transformZZ = localZ.z();
+
+      // Loop over clusters in this DetSet 
       for (const auto& cluster : detset) {
         clusterView.clusterIds(clusterIndex) = detset.id();
         clusterView.pitchX(clusterIndex) = pitchX;
         clusterView.pitchY(clusterIndex) = pitchY;
         clusterView.thickness(clusterIndex) = thickness;
         clusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
+        clusterView.transformXX(clusterIndex) = transformXX;
+        clusterView.transformXY(clusterIndex) = transformXY;
+        clusterView.transformXZ(clusterIndex) = transformXZ;
+        clusterView.transformYZ(clusterIndex) = transformYZ;
+        clusterView.transformYY(clusterIndex) = transformYY;
+        clusterView.transformYZ(clusterIndex) = transformYZ;
+        clusterView.transformZX(clusterIndex) = transformZX;
+        clusterView.transformZY(clusterIndex) = transformZY;
+        clusterView.transformZZ(clusterIndex) = transformZZ;
         ++clusterIndex;
         //if (verbose_) std::cout << "Processing clusterIndex=" << clusterIndex << std::endl;
       }
     }
     if (verbose_) std::cout << "Done with siPixelClusters (cpu)" << std::endl;
 
+
     // Produce a device–resident copy, allocating a device candidate collection
-    ClusterGeometrysSoACollection tkClusterGeometryDevice(nPixelClusters, queue);
+    ClusterGeometrysSoACollection tkClusterGeometryDevice(calculateNumberOfClusters, queue);
 
     // Copy from the host candidate collection to the device one.
     alpaka::memcpy(queue, tkClusterGeometryDevice.buffer(), tkCluster.buffer());
     alpaka::wait(queue);
     if (verbose_) std::cout << "Copied CandidateSoA to device" << std::endl;
 
-    if (verbose_) std::cout << "Overallocation check......"  << std::endl;
-    if (verbose_) std::cout << "on Host: SiPixelClusters should be " << nPixelClusters << std::endl;
+    //if (verbose_) std::cout << "on Host: SiPixelClusters size (total number of pixels) " << nPixelClusters << std::endl;
     if (verbose_) std::cout << "on Device: clusterView.size() = " << clusterView.metadata().size() << std::endl;
 
     // produce output

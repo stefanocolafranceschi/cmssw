@@ -241,6 +241,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       double forceXError_,
                                       double forceYError_) const {
 
+
             // Get thread and grid indices
             auto threadIdx = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0]; // Thread index within the block
             auto blockIdx  = alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0];   // Block index
@@ -248,6 +249,28 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
+
+            // Debugging printout ---------------------------------
+            if (globalThreadId == 0) {
+                printf("--------");
+
+                for (int clusterID = 0; clusterID < static_cast<int>(geoclusterView.metadata().size()); clusterID++) {
+                    int pixelIndex = 0;
+
+                    for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
+                        //if (digiView.clus(pixel) == clusterID) {
+                        //    pixelIndex++;
+                        //    printf("Cluster %d out of %d clusters, pixel %d, charge = %d\n",
+                        //           clusterID, static_cast<int>(geoclusterView.metadata().size()), pixelIndex, digiView.adc(pixel));
+                        //}
+                        printf("AAAAAAACluster %d %u\n ", digiView.clus(pixel), pixel);
+                    }
+                }
+                printf("--------");
+            }
+            return;            
+            // Debugging printout ---------------------------------
+
 
             // Get total Clusters and Candidates
             uint32_t numClusters = static_cast<uint32_t>(geoclusterView.metadata().size());
@@ -258,11 +281,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                 if (globalThreadId == 0) {
                     *clusterCounterDevice = 0;
-
                 }
 
                 uint32_t clusterIdx = globalThreadId; // Each thread handles exactly one cluster
                 uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
+
+                bool shouldBeSplit = false;
 
                 for (uint32_t candIdx = 0; candIdx < numCandidates; ++candIdx) {
                     //printf("Processing Cluster: %u, Candidate: %u/%u Block index: %u, Threads per block: %u, Total threads: %u\n",
@@ -286,26 +310,48 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     float jetPx = jet.px();
                     float jetPy = jet.py();
                     float jetPz = jet.pz();
-
+//the following block is wrong (assumed wrongly Cartesian..)
+/*
                     // Calculate deltaR directly with scalar values
                     float deltaEta = hitView[clusterIdx].yGlobal() - jetPy;
                     float deltaPhi = hitView[clusterIdx].xGlobal() - jetPx;
+                    float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
+*/
+                    // Compute jet eta and phi
+                    float jetEta = 0.5 * log((sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz) + jetPz) /
+                                              (sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz) - jetPz));
+                    float jetPhi = atan2(jetPy, jetPx);
+
+                    // Compute cluster eta and phi
+                    float clusterEta = 0.5 * log((sqrt(hitView[clusterIdx].xGlobal() * hitView[clusterIdx].xGlobal() +
+                                                       hitView[clusterIdx].yGlobal() * hitView[clusterIdx].yGlobal() +
+                                                       hitView[clusterIdx].zGlobal() * hitView[clusterIdx].zGlobal()) +
+                                                  hitView[clusterIdx].zGlobal()) /
+                                                 (sqrt(hitView[clusterIdx].xGlobal() * hitView[clusterIdx].xGlobal() +
+                                                       hitView[clusterIdx].yGlobal() * hitView[clusterIdx].yGlobal() +
+                                                       hitView[clusterIdx].zGlobal() * hitView[clusterIdx].zGlobal()) -
+                                                  hitView[clusterIdx].zGlobal()));
+                    float clusterPhi = atan2(hitView[clusterIdx].yGlobal(), hitView[clusterIdx].xGlobal());
+
+                    // Compute deltaR properly
+                    float deltaEta = clusterEta - jetEta;
+                    float deltaPhi = atan2(sin(clusterPhi - jetPhi), cos(clusterPhi - jetPhi)); // Proper phi difference handling
                     float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
 
                     //printf("deltaR = %f  deltaR_ = %f", deltaR, deltaR_);
 
                     // Check deltaR condition and split clusters if applicable
                     if (deltaR < deltaR_) {
-                        printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
 
+                        shouldBeSplit = true;
+                        //printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
                         splitCluster(acc,
                                      hitView,
                                      digiView,
                                      clusterView,
                                      clusterIdx,
                                      jetPx, jetPy, jetPz, 
-                                     pitchX, pitchY, thickness,
-                                     geoclusterView[clusterIdx].tanLorentzAngles(),
+                                     geoclusterView,                                     
                                      chargeFracMin_,
                                      expSizeXAtLorentzAngleIncidence_,
                                      expSizeXDeltaPerTanAlpha_,
@@ -320,31 +366,30 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      forceXError_,
                                      forceYError_);
                     }
-                    else {
-                        //printf("This cluster: %u has deltaR > deltaR_ NO NEED TO SPLIT\n",clusterIdx);
 
-                        // Use atomicAdd to ensure pixels are added correctly
-                        uint32_t idx = alpaka::atomicAdd(acc, clusterCounterDevice, uint32_t(1));
-                        //printf("AtomicAdd result: %u \n", idx);
-                        //printf("DigiView size: %u\n", static_cast<uint32_t>(digiView.metadata().size()));
+                }
+                if (!shouldBeSplit) {
+                    //printf("This cluster: %u has deltaR > deltaR_ NO NEED TO SPLIT\n",clusterIdx);
+                    
+                    // Use atomicAdd to ensure pixels are added correctly
+                    uint32_t idx = alpaka::atomicAdd(acc, clusterCounterDevice, uint32_t(1));
+                    
+                    //printf("AtomicAdd result: %u \n", idx);
+                    //printf("DigiView size: %u\n", static_cast<uint32_t>(digiView.metadata().size()));
 
-                        // Iterate over all digis to find those belonging to the current cluster
-                        //for (uint32_t pixel : cms::alpakatools::uniform_elements(acc, digiView.metadata().size())) {
-                        for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); ++pixel) {
+                    // Iterate over all digis to find those belonging to the current cluster
+                    for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); ++pixel) {
 
-                            if (static_cast<uint32_t>(digiView[pixel].clus()) == clusterIdx) {
-                                //printf("Pixel = %u ", pixel);
-                                outputDigis[idx].clus() = idx;
-                                outputDigis[idx].xx() = digiView[pixel].xx();
-                                outputDigis[idx].yy() = digiView[pixel].yy();
-                                outputDigis[idx].xx() = digiView[pixel].adc();
-                                outputDigis[idx].rawIdArr() = digiView[pixel].rawIdArr();
-                                outputDigis[idx].moduleId() = digiView[pixel].moduleId();
-                            }
+                        if (static_cast<uint32_t>(digiView[pixel].clus()) == clusterIdx) {
+                            //printf("Pixel = %u ", pixel);
+                            outputDigis[idx].clus() = idx;
+                            outputDigis[idx].xx() = digiView[pixel].xx();
+                            outputDigis[idx].yy() = digiView[pixel].yy();
+                            outputDigis[idx].xx() = digiView[pixel].adc();
+                            outputDigis[idx].rawIdArr() = digiView[pixel].rawIdArr();
+                            outputDigis[idx].moduleId() = digiView[pixel].moduleId();
                         }
-                        //printf("written...");                        
                     }
-
                 }
             }
         }
@@ -386,7 +431,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     clusterData->scoresValues[pixelIdx] = -secondMinDist;
                 }
                 else {
-                    printf("ERROR@ secondDistScore: pixelIdx (%u) exceeds maxPixels (%d)\n", pixelIdx, maxPixels);
+                    //printf("ERROR@ secondDistScore: pixelIdx (%u) exceeds maxPixels (%d)\n", pixelIdx, maxPixels);
                     return;
                 }
 
@@ -404,13 +449,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         }
 
         ALPAKA_FN_ACC void sortScores(clusterProperties* clusterData) const {
-            printf("Pixel counter: %u\n", clusterData->pixelCounter);
+            //printf("Pixel counter: %u\n", clusterData->pixelCounter);
 
             for (uint32_t i = 0; i < clusterData->pixelCounter - 1; i++) {
                 for (uint32_t j = 0; j < clusterData->pixelCounter - i - 2; j++) {
 
                     if (j >= maxPixels-1) {
-                        printf("ERROR@ sortScores: j (%u) exceeds maxPixels (%d)\n", j, maxPixels);
+                        //printf("ERROR@ sortScores: j (%u) exceeds maxPixels (%d)\n", j, maxPixels);
                         return;
                     }
 
@@ -440,8 +485,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         SiPixelClustersSoAConstView clusterView,
                                         uint32_t clusterIdx,
                                         float jetPx, float jetPy, float jetPz,
-                                        float pitchX, float pitchY, float thickness,
-                                        float tanLorentzAngles,
+                                        ClusterGeometrysSoAView geoclusterView,
                                         double chargeFracMin_,
                                         float expSizeXAtLorentzAngleIncidence_,
                                         float expSizeXDeltaPerTanAlpha_,
@@ -456,11 +500,24 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         double forceXError_,
                                         double forceYError_) const {
 
-            printf("This cluster: %u now processed in SplitCluster routine\n",clusterIdx);
+            //printf("This cluster: %u now processed in SplitCluster routine\n",clusterIdx);
 
             bool split = false;
-            float jetTanAlpha = jetPx / jetPz;
-            float jetTanBeta = jetPy / jetPz;
+
+            float pitchX = geoclusterView[clusterIdx].pitchX();
+            float pitchY = geoclusterView[clusterIdx].pitchY();
+            float thickness = geoclusterView[clusterIdx].thickness();
+            float tanLorentzAngles = geoclusterView[clusterIdx].tanLorentzAngles();
+
+            // Apply precomputed transformation matrix
+            float jetDirLocalX = geoclusterView[clusterIdx].transformXX() * jetPx + geoclusterView[clusterIdx].transformXY() * jetPy + geoclusterView[clusterIdx].transformXZ() * jetPz;
+            float jetDirLocalY = geoclusterView[clusterIdx].transformYX() * jetPx + geoclusterView[clusterIdx].transformYY() * jetPy + geoclusterView[clusterIdx].transformYZ() * jetPz;
+            float jetDirLocalZ = geoclusterView[clusterIdx].transformZX() * jetPx + geoclusterView[clusterIdx].transformZY() * jetPy + geoclusterView[clusterIdx].transformZZ() * jetPz;
+
+            // Now, proceed with your calculations
+            float jetTanAlpha = jetDirLocalX / jetDirLocalZ;
+            float jetTanBeta = jetDirLocalY / jetDirLocalZ;
+
             float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
 
             float expSizeX = expSizeXAtLorentzAngleIncidence_ +
@@ -512,6 +569,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 }
                 else {    
                     // Splitting the pixels and writing them for the current clusterIdx
+printf("cluster %u has meanExp %d", clusterIdx, meanExp);
 
                     for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
 
@@ -520,7 +578,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                             // Use atomicAdd to ensure pixels are added correctly to pixelCounter
                             uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
-
+// check from here...
                             int sub = static_cast<int>(digiView[j].adc()) / chargePerUnit_ * expectedADC / centralMIPCharge_;
                             if (sub < 1) sub = 1;
                             int perDiv = digiView[j].adc() / sub;
@@ -553,14 +611,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     while (!stop && remainingSteps > 0) {
                         remainingSteps--;
+                        printf("Remaining steps: %d", remainingSteps);
 
                         // Compute distances
                         for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
 
-                            if (j >= maxPixels) continue; // Safety check for bounds
+                            //if (j >= maxPixels) continue; // Safety check for bounds
 
                             for (unsigned int i = 0; i < meanExp; i++) {
-                                if (i >= maxSubClusters) continue; // Safety check for bounds
+                                //if (i >= maxSubClusters) continue; // Safety check for bounds
 
                                 // Calculate the distance in X and Y for each pixel
                                 float distanceX = 1.f * digiView[j].xx() - clusterPropertiesDevice[clusterIdx].clx[i];
@@ -583,7 +642,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 clusterPropertiesDevice[clusterIdx].distanceMap[j][i] = sqrt(dist);
                             }
                         }
-
 
                         secondDistScore(clusterPropertiesDevice, meanExp);
                         
@@ -646,7 +704,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                                     }
                                     else {
-                                        //printf("ERROR iterating over scores indices and values exceeds maxPixels %u", 200);
+                                        //printf("ERROR iterating over scores indices and values exceeds maxPixels %u", maxPixels);
                                     }
                                 }
                             }
@@ -688,6 +746,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             }
                         }
                     }
+return;
 
                     // accumulate pixel with same cl
                     for (int cl = 0; cl < (int) meanExp; cl++) {
@@ -786,9 +845,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           << alpaka::getWorkDiv<alpaka::Grid, alpaka::Threads>(workDiv)[0]
           << " threads per block" << std::endl;
 
+    std::cout << "In the kernel... " << std::endl;
 
-    // Printout to verify the kernel launch configuration
-    std::cout << "In the kernel..." << std::endl;
     // std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
 
                 // Kernel executions

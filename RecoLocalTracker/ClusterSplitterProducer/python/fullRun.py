@@ -38,7 +38,7 @@ process.trial = cms.EDProducer(
     nHits=cms.uint32(100),
     offset=cms.int32(10),
     ptMin=cms.double(200),
-    deltaR=cms.double(0.05),
+    deltaR=cms.double(1.9),
     chargeFracMin=cms.double(2.0),
     tanLorentzAngle=cms.double(0.001),
     tanLorentzAngleBarrelLayer1=cms.double(0.001),
@@ -83,7 +83,7 @@ process.schedule = cms.Schedule(
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring('file:step3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1000))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(4))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

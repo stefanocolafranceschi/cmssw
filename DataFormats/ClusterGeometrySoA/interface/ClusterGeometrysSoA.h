@@ -8,7 +8,16 @@ GENERATE_SOA_LAYOUT(ClusterGeometrysLayout,
                     SOA_COLUMN(float, pitchX),
                     SOA_COLUMN(float, pitchY),
                     SOA_COLUMN(float, thickness),
-                    SOA_COLUMN(float, tanLorentzAngles))
+                    SOA_COLUMN(float, tanLorentzAngles),
+                    SOA_COLUMN(float, transformXX),
+                    SOA_COLUMN(float, transformXY),
+                    SOA_COLUMN(float, transformXZ),
+                    SOA_COLUMN(float, transformYX),
+                    SOA_COLUMN(float, transformYY),
+                    SOA_COLUMN(float, transformYZ),
+                    SOA_COLUMN(float, transformZX),
+                    SOA_COLUMN(float, transformZY),
+                    SOA_COLUMN(float, transformZZ))
 
 using ClusterGeometrysSoA = ClusterGeometrysLayout<>;
 using ClusterGeometrysSoAView = ClusterGeometrysSoA::View;

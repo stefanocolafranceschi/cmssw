@@ -18,8 +18,8 @@
 
 #include <alpaka/alpaka.hpp>
 
-constexpr int maxSubClusters = 20;
-constexpr int maxPixels = 200;
+constexpr int maxSubClusters = 100;
+constexpr int maxPixels = 100;
 
 // This represent a per-cluster data needed in the Splitting algorithm
 struct clusterProperties {
