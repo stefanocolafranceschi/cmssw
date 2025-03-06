@@ -25,7 +25,7 @@ process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '
 # HelperSplitter producer
 process.candidateDataSoA = cms.EDProducer("HelperSplitter",
     Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
-    siPixelClusters = cms.InputTag("siPixelClusters","","RECO"),
+    siPixelClusters = cms.InputTag("siPixelClustersPreSplitting"),
     ptMin = cms.double(200),
     tanLorentzAngle = cms.double(0.001),
     tanLorentzAngleBarrelLayer1 = cms.double(0.001),
@@ -59,9 +59,9 @@ process.trial = cms.EDProducer(
     verbose=cms.bool(True),
 )
 
-process.HelperSplitter_step = cms.Path(process.candidateDataSoA)
 process.offlineBeamSpotDevice_step = cms.Path(process.offlineBeamSpotDevice)
 process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplittingAlpaka)
+process.HelperSplitter_step = cms.Path(process.candidateDataSoA)
 process.siPixelRecHitsPreSplitting_step = cms.Path(process.siPixelRecHitsPreSplittingAlpaka)
 #process.pixelVertexing_step = cms.Path(process.recopixelvertexing)
 process.reconstruction_step1 = cms.Path(process.reconstruction_pixelTrackingOnly)
@@ -69,8 +69,8 @@ process.trial_step = cms.Path(process.trial)
 
 # Set the schedule so that HelperSplitter runs before trial
 process.schedule = cms.Schedule(
-    process.HelperSplitter_step,
     process.siPixelClustersPreSplitting_step,
+    process.HelperSplitter_step,
     process.siPixelRecHitsPreSplitting_step,
     #process.pixelVertexing_step,  
     process.reconstruction_step1,  
@@ -83,7 +83,7 @@ process.schedule = cms.Schedule(
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring('file:step3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(4))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

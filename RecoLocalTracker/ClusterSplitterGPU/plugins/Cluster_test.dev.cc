@@ -249,28 +249,28 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
-
+/*
             // Debugging printout ---------------------------------
+            int CalculatedClusters = 0;
             if (globalThreadId == 0) {
-                printf("--------");
 
-                for (int clusterID = 0; clusterID < static_cast<int>(geoclusterView.metadata().size()); clusterID++) {
-                    int pixelIndex = 0;
-
-                    for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
-                        //if (digiView.clus(pixel) == clusterID) {
-                        //    pixelIndex++;
-                        //    printf("Cluster %d out of %d clusters, pixel %d, charge = %d\n",
-                        //           clusterID, static_cast<int>(geoclusterView.metadata().size()), pixelIndex, digiView.adc(pixel));
-                        //}
-                        printf("AAAAAAACluster %d %u\n ", digiView.clus(pixel), pixel);
+                for (int n = 0; n < static_cast<int>(clusterView.metadata().size()); n++) {
+                    for (uint32_t foundCluster = 0; foundCluster < clusterView.clusInModule(n); foundCluster++) {
+                        for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
+                            if ( clusterView.moduleId(n) == digiView.moduleId(pixel) ) {
+                                if (static_cast<int>(foundCluster) == digiView.clus(pixel)) {
+                                    //printf("Module = %u ", clusterView.moduleId(n) );
+                                    //printf("Cluster = %u ", foundCluster);
+                                    //printf("Pixel = %u ", pixel);
+                                }
+                            }
+                        }
                     }
                 }
-                printf("--------");
             }
-            return;            
+            //printf("CalculatedClusters = %d ", CalculatedClusters);            
             // Debugging printout ---------------------------------
-
+*/
 
             // Get total Clusters and Candidates
             uint32_t numClusters = static_cast<uint32_t>(geoclusterView.metadata().size());
@@ -284,7 +284,23 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 }
 
                 uint32_t clusterIdx = globalThreadId; // Each thread handles exactly one cluster
+                uint32_t moduleIdx = 0;
+                uint32_t clusterOffset = clusterIdx;
                 uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
+
+                for (uint32_t n = 0; n < static_cast<uint32_t>(clusterView.metadata().size()); n++) {
+                    uint32_t clustersInModule = clusterView.clusInModule(n);
+                    if (clusterOffset < clustersInModule) {
+                        moduleIdx = n;
+                        break;
+                    }
+                    clusterOffset -= clustersInModule;  // Adjust offset to find correct module
+                }
+                // Now we have:
+                // - `moduleIdx`: The module this cluster belongs to
+                // - `clusterOffset`: The cluster number within that module
+                printf("I am in thread %u, analyzing cluster %u from module %u", 
+                       globalThreadId, clusterOffset, clusterView.moduleId(moduleIdx));
 
                 bool shouldBeSplit = false;
 
@@ -297,41 +313,35 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     //printf("Candidate %u px= %f \n", candIdx, testme);   
 
                     // Fetch the cluster's position and geometry
-                    float pitchX = geoclusterView[clusterIdx].pitchX();
-                    float pitchY = geoclusterView[clusterIdx].pitchY();
-                    float thickness = geoclusterView[clusterIdx].thickness();
-
-                    const auto& jet = candidateView[candIdx];
+                    float pitchX = geoclusterView.pitchX(clusterIdx);
+                    float pitchY = geoclusterView.pitchY(clusterIdx);
+                    float thickness = geoclusterView.thickness(clusterIdx);
 
                     // Skip low-pt jets
-                    if (jet.pt() < ptMin_) continue;
+                    if (candidateView.pt(candIdx) < ptMin_) return;
 
-                    // Extract jet direction components
-                    float jetPx = jet.px();
-                    float jetPy = jet.py();
-                    float jetPz = jet.pz();
-//the following block is wrong (assumed wrongly Cartesian..)
-/*
-                    // Calculate deltaR directly with scalar values
-                    float deltaEta = hitView[clusterIdx].yGlobal() - jetPy;
-                    float deltaPhi = hitView[clusterIdx].xGlobal() - jetPx;
-                    float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
-*/
+                    // Extract jet direction components correctly
+                    float jetPx = candidateView.px(candIdx);
+                    float jetPy = candidateView.py(candIdx);
+                    float jetPz = candidateView.pz(candIdx);
+
                     // Compute jet eta and phi
                     float jetEta = 0.5 * log((sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz) + jetPz) /
                                               (sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz) - jetPz));
                     float jetPhi = atan2(jetPy, jetPx);
 
-                    // Compute cluster eta and phi
-                    float clusterEta = 0.5 * log((sqrt(hitView[clusterIdx].xGlobal() * hitView[clusterIdx].xGlobal() +
-                                                       hitView[clusterIdx].yGlobal() * hitView[clusterIdx].yGlobal() +
-                                                       hitView[clusterIdx].zGlobal() * hitView[clusterIdx].zGlobal()) +
-                                                  hitView[clusterIdx].zGlobal()) /
-                                                 (sqrt(hitView[clusterIdx].xGlobal() * hitView[clusterIdx].xGlobal() +
-                                                       hitView[clusterIdx].yGlobal() * hitView[clusterIdx].yGlobal() +
-                                                       hitView[clusterIdx].zGlobal() * hitView[clusterIdx].zGlobal()) -
-                                                  hitView[clusterIdx].zGlobal()));
-                    float clusterPhi = atan2(hitView[clusterIdx].yGlobal(), hitView[clusterIdx].xGlobal());
+                    float clusterEta;
+                    float clusterPhi;
+
+                    // Access hit global positions (Rechits are indexed just like clustergeo)
+                    float x = hitView.xGlobal(clusterIdx);
+                    float y = hitView.yGlobal(clusterIdx);
+                    float z = hitView.zGlobal(clusterIdx);
+                    
+                    // Compute eta and phi
+                    float r = sqrt(x * x + y * y + z * z);
+                    clusterEta = 0.5 * log((r + z) / (r - z));
+                    clusterPhi = atan2(y, x);
 
                     // Compute deltaR properly
                     float deltaEta = clusterEta - jetEta;
@@ -350,6 +360,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      digiView,
                                      clusterView,
                                      clusterIdx,
+                                     moduleIdx, 
+                                     clusterOffset,
                                      jetPx, jetPy, jetPz, 
                                      geoclusterView,                                     
                                      chargeFracMin_,
@@ -484,6 +496,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         SiPixelDigisSoAConstView digiView,
                                         SiPixelClustersSoAConstView clusterView,
                                         uint32_t clusterIdx,
+                                        uint32_t moduleIdx,
+                                        uint32_t clusterOffset,  
                                         float jetPx, float jetPy, float jetPz,
                                         ClusterGeometrysSoAView geoclusterView,
                                         double chargeFracMin_,
@@ -551,49 +565,48 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     printf("meanExp <= 1 writing cluster %u", idx);
 
                     // Iterate over all digis to find those belonging to the current cluster
-                    //for (uint32_t pixel : cms::alpakatools::uniform_elements(acc, digiView.metadata().size())) {
                     for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); ++pixel) {
-
-                        if (static_cast<uint32_t>(digiView[pixel].clus()) == clusterIdx) {
-                            outputDigi[idx].clus() = idx;
-                            outputDigi[idx].xx() = digiView[pixel].xx();
-                            outputDigi[idx].yy() = digiView[pixel].yy();
-                            outputDigi[idx].xx() = digiView[pixel].adc();
-                            outputDigi[idx].rawIdArr() = digiView[pixel].rawIdArr();
-                            outputDigi[idx].moduleId() = digiView[pixel].moduleId();
-                            printf("Pixel = %u", pixel);
-                            printf(" adc = %u \n", static_cast<uint32_t>(digiView[pixel].adc()));
+                        if (clusterView.moduleId(moduleIdx) == digiView.moduleId(pixel)) {
+                            if (static_cast<int>(clusterOffset) == digiView.clus(pixel)) {
+                                outputDigi.clus(idx) = idx;
+                                outputDigi.xx(idx) = digiView.xx(pixel);
+                                outputDigi.yy(idx) = digiView.yy(pixel);
+                                outputDigi.xx(idx) = digiView.adc(pixel);
+                                outputDigi.rawIdArr(idx) = digiView.rawIdArr(pixel);
+                                outputDigi.moduleId(idx) = digiView.moduleId(pixel);
+                            }
                         }
-                        printf("--------------------------\n");
                     }
                 }
                 else {    
                     // Splitting the pixels and writing them for the current clusterIdx
-printf("cluster %u has meanExp %d", clusterIdx, meanExp);
+                    printf("cluster %u has meanExp %d", clusterIdx, meanExp);
 
                     for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
 
                         // Check if the pixel belongs to the current cluster (clusterIdx)
-                        if (static_cast<uint32_t>(digiView[j].clus()) == clusterIdx) {
+                        if (clusterView.moduleId(moduleIdx) == digiView.moduleId(j)) {
+                            if (static_cast<int>(clusterOffset) == digiView.clus(j)) {
 
-                            // Use atomicAdd to ensure pixels are added correctly to pixelCounter
-                            uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
-// check from here...
-                            int sub = static_cast<int>(digiView[j].adc()) / chargePerUnit_ * expectedADC / centralMIPCharge_;
-                            if (sub < 1) sub = 1;
-                            int perDiv = digiView[j].adc() / sub;
+                                // Use atomicAdd to ensure pixels are added correctly to pixelCounter
+                                uint32_t idx = alpaka::atomicAdd(acc, &(clusterPropertiesDevice[clusterIdx].pixelCounter), uint32_t(1));
 
-                            // Iterate over the sub-clusters (split pixels)
-                            for (int k = 0; k < sub; k++) {
-                                if (k == sub - 1) perDiv = digiView[j].adc() - perDiv * k;  // Adjust for the last pixel
+                                int sub = static_cast<int>(digiView[j].adc()) / chargePerUnit_ * expectedADC / centralMIPCharge_;
+                                if (sub < 1) sub = 1;
+                                int perDiv = digiView[j].adc() / sub;
 
-                                //printf("Start - to write pixel %u to the new cluster %u \n", j, clusterIdx);
-                                // Write the new split pixels at the obtained index
-                                clusterPropertiesDevice[clusterIdx].pixel_X[idx] = digiView[j].xx(); // Copy x-coordinate from original pixel
-                                clusterPropertiesDevice[clusterIdx].pixel_Y[idx] = digiView[j].yy(); // Copy y-coordinate from original pixel
-                                clusterPropertiesDevice[clusterIdx].pixel_ADC[idx] = perDiv;       // Assign divided charge (ADC)
-                                clusterPropertiesDevice[clusterIdx].pixels[idx] = j;
-                                //printf("Finish - to write pixel %u to the new cluster %u \n", j, clusterIdx);
+                                // Iterate over the sub-clusters (split pixels)
+                                for (int k = 0; k < sub; k++) {
+                                    if (k == sub - 1) perDiv = digiView[j].adc() - perDiv * k;  // Adjust for the last pixel
+
+                                    //printf("Start - to write pixel %u to the new cluster %u \n", j, clusterIdx);
+                                    // Write the new split pixels at the obtained index
+                                    clusterPropertiesDevice[clusterIdx].pixel_X[idx] = digiView[j].xx(); // Copy x-coordinate from original pixel
+                                    clusterPropertiesDevice[clusterIdx].pixel_Y[idx] = digiView[j].yy(); // Copy y-coordinate from original pixel
+                                    clusterPropertiesDevice[clusterIdx].pixel_ADC[idx] = perDiv;       // Assign divided charge (ADC)
+                                    clusterPropertiesDevice[clusterIdx].pixels[idx] = j;
+                                    //printf("Finish - to write pixel %u to the new cluster %u \n", j, clusterIdx);
+                                }
                             }
                         }
                     }
@@ -616,30 +629,35 @@ printf("cluster %u has meanExp %d", clusterIdx, meanExp);
                         // Compute distances
                         for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
 
-                            //if (j >= maxPixels) continue; // Safety check for bounds
+                        // Check if the pixel belongs to the current cluster (clusterIdx)
+                        if (clusterView.moduleId(moduleIdx) == digiView.moduleId(j)) {
+                            if (static_cast<int>(clusterOffset) == digiView.clus(j)) {
 
-                            for (unsigned int i = 0; i < meanExp; i++) {
-                                //if (i >= maxSubClusters) continue; // Safety check for bounds
+                                    //if (j >= maxPixels) continue; // Safety check for bounds
+                                    for (unsigned int i = 0; i < meanExp; i++) {
+                                        //if (i >= maxSubClusters) continue; // Safety check for bounds
 
-                                // Calculate the distance in X and Y for each pixel
-                                float distanceX = 1.f * digiView[j].xx() - clusterPropertiesDevice[clusterIdx].clx[i];
-                                float distanceY = 1.f * digiView[j].yy() - clusterPropertiesDevice[clusterIdx].cly[i];
-                                float dist = 0;
+                                        // Calculate the distance in X and Y for each pixel
+                                        float distanceX = 1.f * digiView.xx(j) - clusterPropertiesDevice[clusterIdx].clx[i];
+                                        float distanceY = 1.f * digiView.yy(j) - clusterPropertiesDevice[clusterIdx].cly[i];
+                                        float dist = 0;
 
-                                if (std::abs(distanceX) > sizeX / 2.f) {
-                                    dist += (std::abs(distanceX) - sizeX / 2.f + 1.f) * (std::abs(distanceX) - sizeX / 2.f + 1.f);
-                                } else {
-                                    dist += (2.f * distanceX / sizeX) * (2.f * distanceX / sizeX);
+                                        if (std::abs(distanceX) > sizeX / 2.f) {
+                                            dist += (std::abs(distanceX) - sizeX / 2.f + 1.f) * (std::abs(distanceX) - sizeX / 2.f + 1.f);
+                                        } else {
+                                            dist += (2.f * distanceX / sizeX) * (2.f * distanceX / sizeX);
+                                        }
+
+                                        if (std::abs(distanceY) > sizeY / 2.f) {
+                                            dist += (std::abs(distanceY) - sizeY / 2.f + 1.f) * (std::abs(distanceY) - sizeY / 2.f + 1.f);
+                                        } else {
+                                            dist += (2.f * distanceY / sizeY) * (2.f * distanceY / sizeY);
+                                        }
+
+                                        // Store the computed distance in the 2D array
+                                        clusterPropertiesDevice[clusterIdx].distanceMap[j][i] = sqrt(dist);
+                                    }
                                 }
-
-                                if (std::abs(distanceY) > sizeY / 2.f) {
-                                    dist += (std::abs(distanceY) - sizeY / 2.f + 1.f) * (std::abs(distanceY) - sizeY / 2.f + 1.f);
-                                } else {
-                                    dist += (2.f * distanceY / sizeY) * (2.f * distanceY / sizeY);
-                                }
-
-                                // Store the computed distance in the 2D array
-                                clusterPropertiesDevice[clusterIdx].distanceMap[j][i] = sqrt(dist);
                             }
                         }
 
@@ -746,7 +764,6 @@ printf("cluster %u has meanExp %d", clusterIdx, meanExp);
                             }
                         }
                     }
-return;
 
                     // accumulate pixel with same cl
                     for (int cl = 0; cl < (int) meanExp; cl++) {
@@ -786,12 +803,12 @@ return;
                         if (idx < static_cast<uint32_t>(outputDigi.metadata().size())) {
                             for (unsigned int j = 0; j < clusterPropertiesDevice[clusterIdx].pixelsForClCounter; j++) {
                                 if (j < maxPixels-1) {
-                                    outputDigi[idx].clus() = idx;    // must be idx not clusterIdx
-                                    outputDigi[idx].xx() = clusterPropertiesDevice[cl].pixelsForCl_X[j];
-                                    outputDigi[idx].yy() = clusterPropertiesDevice[cl].pixelsForCl_Y[j];
-                                    outputDigi[idx].adc() = clusterPropertiesDevice[cl].pixelsForCl_ADC[j];
-                                    outputDigi[idx].rawIdArr() = 0; // Copy raw ID from original pixel
-                                    outputDigi[idx].moduleId() = 0; // Copy module ID from original pixel
+                                    outputDigi.clus(idx) = idx;    // must be idx not clusterIdx
+                                    outputDigi.xx(idx) = clusterPropertiesDevice[cl].pixelsForCl_X[j];
+                                    outputDigi.yy(idx) = clusterPropertiesDevice[cl].pixelsForCl_Y[j];
+                                    outputDigi.adc(idx) = clusterPropertiesDevice[cl].pixelsForCl_ADC[j];
+                                    outputDigi.rawIdArr(idx) = 0; // Copy raw ID from original pixel
+                                    outputDigi.moduleId(idx) = 0; // Copy module ID from original pixel
                                     //printf("Pixel = %u", j);
                                     //printf(" adc = %u", static_cast<uint32_t>(clusterPropertiesDevice[cl].pixelsForCl_ADC[j]));
                                 }
@@ -835,7 +852,7 @@ return;
     // Calculate how many groups (blocks) you need for each view
     uint32_t groupsClusters = divide_up_by(geoclusterView.metadata().size(), items);
 
-    auto workDiv = make_workdiv<Acc1D>(groupsClusters, 64);
+    auto workDiv = make_workdiv<Acc1D>(groupsClusters, items);
 
     std::cout << "\nGot candidateView.metadata().size()=" << candidateView.metadata().size(); 
     std::cout << "\nGot clusterView.metadata().size()=" << geoclusterView.metadata().size()

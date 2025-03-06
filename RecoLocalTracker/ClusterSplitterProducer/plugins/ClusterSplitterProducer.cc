@@ -106,7 +106,9 @@ HelperSplitter::HelperSplitter(edm::ParameterSet const& iConfig)
       ptMin_(iConfig.getParameter<double>("ptMin")),
       tanLorentzAngle_(iConfig.getParameter<double>("tanLorentzAngle")),
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
-      clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
+      //clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
+      clusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
+
       //candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("Candidate"))),
       candidateToken_(consumes<edm::View<reco::Candidate>>(iConfig.getParameter<edm::InputTag>("Candidate"))),
       tTrackingGeom_(esConsumes()),
