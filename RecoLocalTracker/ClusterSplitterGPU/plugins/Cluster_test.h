@@ -36,6 +36,7 @@ struct clusterProperties {
     float pixel_X[maxPixels];             // position
     float pixel_Y[maxPixels];             // position
     float pixel_ADC[maxPixels];           // adc value
+    uint32_t rawIdArr[maxPixels];
     int pixels[maxPixels];                // Storing the index of the pixel
 
     // These are used for the final sub-cluster
@@ -43,6 +44,7 @@ struct clusterProperties {
     float pixelsForCl_X[maxPixels];          // position
     float pixelsForCl_Y[maxPixels];          // position
     float pixelsForCl_ADC[maxPixels];        // adc value
+    float pixelsForCl_rawIdArr[maxPixels];        // adc value
     int pixelsForCl[maxPixels];              // Storing the index of the pixel
 
     // thse are used for k-map like algorithm and scoring
