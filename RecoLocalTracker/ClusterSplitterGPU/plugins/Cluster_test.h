@@ -18,7 +18,7 @@
 
 #include <alpaka/alpaka.hpp>
 
-constexpr int maxSubClusters = 100;
+constexpr int maxSubClusters = 20;
 constexpr int maxPixels = 100;
 
 // This represent a per-cluster data needed in the Splitting algorithm
@@ -33,19 +33,19 @@ struct clusterProperties {
 
     // These are used to store temporary pixel information
     uint32_t pixelCounter;                // how many pixels in the cluster under study
-    float pixel_X[maxPixels];             // position
-    float pixel_Y[maxPixels];             // position
-    float pixel_ADC[maxPixels];           // adc value
-    uint32_t rawIdArr[maxPixels];
     int pixels[maxPixels];                // Storing the index of the pixel
+    float pixel_X[maxPixels];             // X position of each pixel
+    float pixel_Y[maxPixels];             // Y position of each pixel
+    float pixel_ADC[maxPixels];           // adc value of each pixel
+    uint32_t rawIdArr[maxPixels];         // RawAddress of each pixel
 
-    // These are used for the final sub-cluster
-    uint32_t pixelsForClCounter;             // how many pixels in this Cluster
-    float pixelsForCl_X[maxPixels];          // position
-    float pixelsForCl_Y[maxPixels];          // position
-    float pixelsForCl_ADC[maxPixels];        // adc value
-    float pixelsForCl_rawIdArr[maxPixels];        // adc value
-    int pixelsForCl[maxPixels];              // Storing the index of the pixel
+    // These are used for the final sub-cluster (each subcluster contains pixels)
+    uint32_t pixelsForClCounter[maxSubClusters];             // how many pixels in this Cluster
+    float pixelsForCl_X[maxSubClusters][maxPixels];          // position
+    float pixelsForCl_Y[maxSubClusters][maxPixels];          // position
+    float pixelsForCl_ADC[maxSubClusters][maxPixels];        // adc value
+    float pixelsForCl_rawIdArr[maxSubClusters][maxPixels];        // adc value
+    //int pixelsForCl[maxSubClusters][maxPixels];              // Storing the index of the pixel
 
     // thse are used for k-map like algorithm and scoring
     float distanceMap[maxPixels][maxSubClusters];
