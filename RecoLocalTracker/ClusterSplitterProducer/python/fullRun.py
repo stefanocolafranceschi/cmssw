@@ -26,6 +26,7 @@ process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '
 process.candidateDataSoA = cms.EDProducer("HelperSplitter",
     Candidate = cms.InputTag("ak4CaloJets", "", "RECO"),
     siPixelClusters = cms.InputTag("siPixelClustersPreSplitting"),
+    siPixelClustersSoA=cms.InputTag("siPixelClustersPreSplittingAlpaka"),
     ptMin = cms.double(70),
     tanLorentzAngle = cms.double(0.0),
     tanLorentzAngleBarrelLayer1 = cms.double(0.0),

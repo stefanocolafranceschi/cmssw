@@ -17,7 +17,9 @@ GENERATE_SOA_LAYOUT(ClusterGeometrysLayout,
                     SOA_COLUMN(float, transformYZ),
                     SOA_COLUMN(float, transformZX),
                     SOA_COLUMN(float, transformZY),
-                    SOA_COLUMN(float, transformZZ))
+                    SOA_COLUMN(float, transformZZ),
+                    SOA_COLUMN(uint32_t, clusterOffset),
+                    SOA_COLUMN(uint32_t, moduleId))
 
 using ClusterGeometrysSoA = ClusterGeometrysLayout<>;
 using ClusterGeometrysSoAView = ClusterGeometrysSoA::View;

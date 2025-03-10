@@ -30,6 +30,11 @@
 
 #include <alpaka/alpaka.hpp>
 
+#include "DataFormats/SiPixelDetId/interface/PXBDetId.h"
+#include "DataFormats/SiPixelDetId/interface/PXFDetId.h"
+#include "DataFormats/SiPixelDetId/interface/PixelSubdetector.h"
+#include "DataFormats/DetId/interface/DetId.h"  // For generic DetId access
+
 #include "HeterogeneousCore/AlpakaInterface/interface/Backend.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/devices.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
@@ -53,6 +58,11 @@
 
 #include "DataFormats/Common/interface/Handle.h"
 #include "DataFormats/Common/interface/DetSetVector.h"
+
+#include "DataFormats/SiPixelClusterSoA/interface/SiPixelClustersDevice.h"
+#include "DataFormats/SiPixelClusterSoA/interface/SiPixelClustersHost.h"
+#include "DataFormats/SiPixelClusterSoA/interface/alpaka/SiPixelClustersSoACollection.h"
+
 
 #include "DataFormats/GeometryVector/interface/VectorUtil.h"
 #include "DataFormats/TrackerCommon/interface/TrackerTopology.h"
@@ -93,6 +103,8 @@ private:
   float tanLorentzAngleBarrelLayer1_;  
 
   edm::EDGetTokenT<SiPixelClusterCollectionNew> clusterToken_;
+//  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> SoAclusterToken_;
+const edm::EDGetTokenT<SiPixelClustersHost> SoAclusterToken_;
   edm::EDGetTokenT<edm::View<reco::Candidate>> candidateToken_;
   edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> const tTrackingGeom_;
   edm::ESGetToken<TrackerTopology, TrackerTopologyRcd> const tTrackerTopo_;
@@ -108,7 +120,7 @@ HelperSplitter::HelperSplitter(edm::ParameterSet const& iConfig)
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
       //clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
       clusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
-
+      SoAclusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClustersSoA"))),
       //candidateToken_(consumes<edm::View<reco::Candidate>>(edm::InputTag("Candidate"))),
       candidateToken_(consumes<edm::View<reco::Candidate>>(iConfig.getParameter<edm::InputTag>("Candidate"))),
       tTrackingGeom_(esConsumes()),
@@ -152,6 +164,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     // Create the CandidateSoA on the host (tkCandidates)
     CandidatesHost tkCandidates(nCandidates, queue);
     auto candidateView = tkCandidates.view();
+
 
     // Fill the CandidateSoA on the host
     size_t candidateIndex = 0;
@@ -209,12 +222,42 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     if (verbose_) std::cout << "Calculated " << calculateNumberOfClusters << " clusters" << std::endl;
 
     // Create the ClusterGeometrySoA on CPU (and its view)
-    ClusterGeometrysHost tkCluster(calculateNumberOfClusters, queue);
-    auto clusterView = tkCluster.view();
+    ClusterGeometrysHost geotkCluster(calculateNumberOfClusters, queue);
+    auto geoclusterView = geotkCluster.view();
     if (verbose_) std::cout << "Clusters done" << std::endl;
 
 
+    // Getting the ClusterSoA to access module/clusterOffset to fill the conveniente geoSoA
     size_t clusterIndex = 0;
+    auto const& clustersSoA = iEvent.get(SoAclusterToken_);
+
+    size_t nClustersSoA = clustersSoA.view().metadata().size();
+
+    uint32_t localClusterIdx;  // Local index for each cluster within the module
+
+    uint32_t clustersInModule;
+    uint32_t moduleId = 0;
+
+    for (uint32_t n = 0; n < nClustersSoA; n++) {
+        clustersInModule = clustersSoA.view().clusInModule(n);  // Number of clusters in the current module
+        moduleId = clustersSoA.view().moduleId(n);  // Module ID
+        //printf("Reading %u moduleId: %u clustersInModule: %u \n", n, moduleId, clustersInModule);
+
+        // Now process each cluster in the current module
+        for (localClusterIdx = 0; localClusterIdx < clustersInModule; localClusterIdx++) {
+     
+            // Process the cluster (in this case, print info)
+            //printf("Assigned thread %u to module %u with local offset %u\n", 
+            //       clusterIndex, moduleId, localClusterIdx);
+            geoclusterView.moduleId(clusterIndex) = moduleId;
+            geoclusterView.clusterOffset(clusterIndex) = localClusterIdx;
+
+            clusterIndex++;
+        }
+    }
+
+
+    clusterIndex = 0;
     // Process all pixels and fill the clusterGeo SoA
     for (auto detIt = PixelClusters.begin(); detIt != PixelClusters.end(); ++detIt) {
       //if (verbose_) std::cout << "Processing detIt, DetId: " << detIt->id() << ", Number of Clusters: " << detIt->size() << std::endl;
@@ -240,22 +283,25 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
 
       // Loop over clusters in this DetSet 
       for (const auto& cluster : detset) {
-        clusterView.clusterIds(clusterIndex) = detset.id();
-        clusterView.pitchX(clusterIndex) = pitchX;
-        clusterView.pitchY(clusterIndex) = pitchY;
-        clusterView.thickness(clusterIndex) = thickness;
-        clusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
-        clusterView.transformXX(clusterIndex) = transformXX;
-        clusterView.transformXY(clusterIndex) = transformXY;
-        clusterView.transformXZ(clusterIndex) = transformXZ;
-        clusterView.transformYZ(clusterIndex) = transformYZ;
-        clusterView.transformYY(clusterIndex) = transformYY;
-        clusterView.transformYZ(clusterIndex) = transformYZ;
-        clusterView.transformZX(clusterIndex) = transformZX;
-        clusterView.transformZY(clusterIndex) = transformZY;
-        clusterView.transformZZ(clusterIndex) = transformZZ;
+        geoclusterView.clusterIds(clusterIndex) = detset.id();
+        geoclusterView.pitchX(clusterIndex) = pitchX;
+        geoclusterView.pitchY(clusterIndex) = pitchY;
+        geoclusterView.thickness(clusterIndex) = thickness;
+        geoclusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle;
+        geoclusterView.transformXX(clusterIndex) = transformXX;
+        geoclusterView.transformXY(clusterIndex) = transformXY;
+        geoclusterView.transformXZ(clusterIndex) = transformXZ;
+        geoclusterView.transformYZ(clusterIndex) = transformYZ;
+        geoclusterView.transformYY(clusterIndex) = transformYY;
+        geoclusterView.transformYZ(clusterIndex) = transformYZ;
+        geoclusterView.transformZX(clusterIndex) = transformZX;
+        geoclusterView.transformZY(clusterIndex) = transformZY;
+        geoclusterView.transformZZ(clusterIndex) = transformZZ;
+
         ++clusterIndex;
-        //if (verbose_) std::cout << "Processing clusterIndex=" << clusterIndex << std::endl;
+
+        //f (verbose_) std::cout << "Processing clusterIndex=" << clusterIndex
+        //                        << ", detset id=" << detset.id() << std::endl;
       }
     }
     if (verbose_) std::cout << "Done with siPixelClusters (cpu)" << std::endl;
@@ -265,12 +311,12 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     ClusterGeometrysSoACollection tkClusterGeometryDevice(calculateNumberOfClusters, queue);
 
     // Copy from the host candidate collection to the device one.
-    alpaka::memcpy(queue, tkClusterGeometryDevice.buffer(), tkCluster.buffer());
+    alpaka::memcpy(queue, tkClusterGeometryDevice.buffer(), geotkCluster.buffer());
     alpaka::wait(queue);
     if (verbose_) std::cout << "Copied CandidateSoA to device" << std::endl;
 
     //if (verbose_) std::cout << "on Host: SiPixelClusters size (total number of pixels) " << nPixelClusters << std::endl;
-    if (verbose_) std::cout << "on Device: clusterView.size() = " << clusterView.metadata().size() << std::endl;
+    if (verbose_) std::cout << "on Device: geoclusterView.size() = " << geoclusterView.metadata().size() << std::endl;
 
     // produce output
     iEvent.emplace(CandidatesSoACollection_, std::move(tkCandidatesDevice));
@@ -290,6 +336,7 @@ void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptio
     desc.add<double>("tanLorentzAngle", 0.1)->setComment("Lorentz angle tangent");
     desc.add<double>("tanLorentzAngleBarrelLayer1", 0.2)->setComment("Lorentz angle tangent for Barrel Layer 1");
     desc.add<edm::InputTag>("siPixelClusters", edm::InputTag("siPixelClusters"))->setComment("Collection for siPixelClusters");
+    desc.add<edm::InputTag>("siPixelClustersSoA", edm::InputTag("siPixelClustersSoA"))->setComment("Collection for siPixelClustersSoA");
     desc.add<edm::InputTag>("Candidate", edm::InputTag("Candidate"))->setComment("Candidates");
     descriptions.add("HelperSplitter", desc);
 }

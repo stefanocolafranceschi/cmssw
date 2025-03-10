@@ -249,6 +249,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
+
+            //const char* info = "TESTA";
+            //if (globalThreadId == 0) printDebug(acc, digiView, clusterView, info);
+            //if (globalThreadId == 0) printf("Cl_SoA entry = %u\nCl_SoA moduleStart = %u\nCl_SoA clusInModule = %u\nCl_SoA moduleId = %u\nCl_SoA clusModuleStart = %u\n----\n", n, clusterView.moduleStart(n), clusterView.clusInModule(n), clusterView.moduleId(n), clusterView.clusModuleStart(n));
+
+
 /*
             // Debugging printout ---------------------------------
             int CalculatedClusters = 0;
@@ -259,9 +265,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
                             if ( clusterView.moduleId(n) == digiView.moduleId(pixel) ) {
                                 if (static_cast<int>(foundCluster) == digiView.clus(pixel)) {
-                                    //printf("Module = %u ", clusterView.moduleId(n) );
-                                    //printf("Cluster = %u ", foundCluster);
-                                    //printf("Pixel = %u ", pixel);
+                                    printf("Module = %u ", clusterView.moduleId(n) );
+                                    printf("Cluster = %u ", foundCluster);
+                                    printf("Pixel = %u ", pixel);
                                 }
                             }
                         }
@@ -276,31 +282,49 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             uint32_t numClusters = static_cast<uint32_t>(geoclusterView.metadata().size());
             uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
 
-
             // Ensure only valid threads process clusters
             if (globalThreadId < numClusters-2) {
+            //if (globalThreadId ==7) {
 
                 if (globalThreadId == 0) {
                     *clusterCounterDevice = 0;
                 }
 
-                uint32_t clusterIdx = globalThreadId; // Each thread handles exactly one cluster
-                uint32_t moduleIdx = 0;
-                uint32_t clusterOffset = clusterIdx;
-
+                uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
+                uint32_t moduleId = geoclusterView.moduleId(clusterIdx);
+                uint32_t clusterOffset = geoclusterView.clusterOffset(clusterIdx);
+/*
+                // This following approach resulted wrong because for multiple clusters would belong to a module
+                // rely on the above 2 lines!
                 for (uint32_t n = 0; n < static_cast<uint32_t>(clusterView.metadata().size()); n++) {
-                    uint32_t clustersInModule = clusterView.clusInModule(n);
-                    if (clusterOffset < clustersInModule) {
-                        moduleIdx = n;
-                        break;
+                    uint32_t clustersInModule = clusterView.clusInModule(n);  // Number of clusters in this module
+
+                    // Debugging print to see the module size and current global index
+                    printf("n = %u, cumulativeClusters = %u, clustersInModule = %u, clusterIdx = %u, moduleId = %u\n", 
+                           n, cumulativeClusters, clustersInModule, clusterIdx, clusterView.moduleId(n));
+
+                    // If clustersInModule is non-zero, check the range for clusterIdx
+                    if (clustersInModule > 0) {
+                        // Check if the current global index falls within the current module's cluster range
+                        if (clusterIdx >= cumulativeClusters && clusterIdx < cumulativeClusters + clustersInModule) {
+                            moduleId = clusterView.moduleId(n); // Set the module index for this global cluster
+                            clusterOffset = clusterIdx - cumulativeClusters; // Local index of cluster within the module
+                            printf("Found cluster %u in module %u, clusterOffset = %u\n", clusterIdx, moduleId, clusterOffset);
+                            break; // Once found, break out of the loop
+                        }
                     }
-                    clusterOffset -= clustersInModule;  // Adjust offset to find correct module
+                    
+                    // Update cumulativeClusters after checking the module
+                    cumulativeClusters += clustersInModule;  // Update cumulative clusters count
                 }
-                // Now I have:
-                // - `moduleIdx`: The module this cluster belongs to
+*/
+
+                // Now we have:
+                // - `moduleId`: The module this cluster belongs to
                 // - `clusterOffset`: The cluster number within that module
-                //printf("I am in thread %u, analyzing cluster %u from module %u", 
-                //       globalThreadId, clusterOffset, clusterView.moduleId(moduleIdx));
+                printf("I am in thread %u, analyzing cluster %u from module %u\n", 
+                       globalThreadId, clusterOffset, moduleId);
+
 
                 //printf("About to run over %u, Candidates\n", numCandidates);
 
@@ -350,14 +374,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Check deltaR condition and split clusters if applicable
                     if (deltaR < deltaR_) {
-                        printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
+                        //printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
 
                         splitCluster(acc,
                                      hitView,
                                      digiView,
                                      clusterView,
                                      clusterIdx,
-                                     moduleIdx,
+                                     moduleId,
                                      clusterOffset,
                                      jetPx, jetPy, jetPz, 
                                      geoclusterView,                                     
@@ -376,13 +400,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      forceYError_);
                     }
                     else {
-                        storeOutputDigis(acc, digiView, outputDigis, moduleIdx, clusterOffset, clusterCounterDevice);
+                        storeOutputDigis(acc, digiView, outputDigis, moduleId, clusterOffset, clusterCounterDevice);
                     }
                 }
             }
             else {
                 return;
             }
+
+            //info = "TESTB";
+            //if (globalThreadId == 0) printDebug(acc, digiView, clusterView, info);
+
         }
 
 
@@ -471,12 +499,43 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         }
 
 
+
+
+        template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>        
+        ALPAKA_FN_ACC void printDebug(
+            TAcc const& acc,
+            const SiPixelDigisSoAConstView digiView,
+            const SiPixelClustersSoAConstView clusterView,
+            const char* info) const {
+
+            // Debugging printout ---------------------------------
+            //int CalculatedClusters = 0;
+
+            for (int n = 0; n < static_cast<int>(clusterView.metadata().size()); n++) {
+                for (uint32_t foundCluster = 0; foundCluster < clusterView.clusInModule(n); foundCluster++) {
+                    for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
+                        if ( clusterView.moduleId(n) == digiView.moduleId(pixel) ) {
+                            if (static_cast<int>(foundCluster) == digiView.clus(pixel)) {
+                                printf("%s Module = %u ", info, clusterView.moduleId(n) );
+                                printf("%s Cluster = %u ",info, foundCluster);
+                                printf("%s Pixel = %u \n", info, pixel);
+                            }
+                        }
+                    }
+                }
+            }
+            //printf("CalculatedClusters = %d ", CalculatedClusters);            
+            // Debugging printout ---------------------------------
+        }
+
+
+
         template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>        
         ALPAKA_FN_ACC void storeOutputDigis(
             TAcc const& acc,
             const SiPixelDigisSoAConstView digiView,
             SiPixelDigisSoAView outputDigis,
-            uint32_t moduleIdx,
+            uint32_t moduleId,
             uint32_t clusterOffset,
             uint32_t* clusterCounterDevice) const {
 
@@ -490,10 +549,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             //printf("output size: %u\n", static_cast<uint32_t>(outputDigis.metadata().size()));
 
             // Reminder:
-            // - `moduleIdx`: The module this cluster belongs to
+            // - `moduleId`: The module this cluster belongs to
             // - `clusterOffset`: The cluster number within that module
             for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
-                if ( moduleIdx == static_cast<uint32_t>(digiView.moduleId(pixel) )) {
+                if ( moduleId == static_cast<uint32_t>(digiView.moduleId(pixel) )) {
                     if ( clusterOffset == static_cast<uint32_t>(digiView.clus(pixel) )) {
 
                         if (storeIdx >= static_cast<uint32_t>(outputDigis.metadata().size())) {
@@ -526,7 +585,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         SiPixelDigisSoAConstView digiView,
                                         SiPixelClustersSoAConstView clusterView,
                                         uint32_t clusterIdx,
-                                        uint32_t moduleIdx,
+                                        uint32_t moduleId,
                                         uint32_t clusterOffset,  
                                         float jetPx, float jetPy, float jetPz,
                                         ClusterGeometrysSoAView geoclusterView,
@@ -590,7 +649,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 if (meanExp <= 1) {
                     printf("--------------------------");
                     printf("meanExp <= 1 writing cluster %u", clusterIdx);
-                    storeOutputDigis(acc, digiView, outputDigis, moduleIdx, clusterOffset, clusterCounterDevice);
+                    storeOutputDigis(acc, digiView, outputDigis, moduleId, clusterOffset, clusterCounterDevice);
                 }
                 else {
 
@@ -602,7 +661,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
 
                         // Check if the pixel belongs to the current cluster (clusterIdx)
-                        if (clusterView.moduleId(moduleIdx) == digiView.moduleId(j)) {
+                        if (clusterView.moduleId(moduleId) == digiView.moduleId(j)) {
                             if (static_cast<int>(clusterOffset) == digiView.clus(j)) {
 
                                 // Use atomicAdd to ensure pixels are added correctly to pixelCounter
@@ -650,7 +709,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         // Compute distances
                         for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); ++j) {
                             // Check if the pixel belongs to the current cluster (clusterIdx)
-                            if (clusterView.moduleId(moduleIdx) == digiView.moduleId(j)) {
+                            if (clusterView.moduleId(moduleId) == digiView.moduleId(j)) {
                                 if (static_cast<int>(clusterOffset) == digiView.clus(j)) {
 
                                     //if (j >= maxPixels) continue; // Safety check for bounds
@@ -831,7 +890,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             outputDigis.yy(idx + j) = static_cast<uint16_t>(clusterPropertiesDevice[clusterIdx].pixelsForCl_Y[cl][j]);
                             outputDigis.adc(idx + j) = static_cast<uint16_t>(clusterPropertiesDevice[clusterIdx].pixelsForCl_ADC[cl][j]);
                             outputDigis.rawIdArr(idx + j) = static_cast<uint32_t>(clusterPropertiesDevice[clusterIdx].pixelsForCl_rawIdArr[cl][j]);
-                            outputDigis.moduleId(idx + j) = moduleIdx;                            
+                            outputDigis.moduleId(idx + j) = moduleId;
+                            printf("outputDigis, module=%u outputDigis.clus(%u)=%u\n", moduleId, (idx + j),j);                            
                         }
                         // Use atomicAdd to ensure pixels are added correctly
                         idx = alpaka::atomicAdd(acc, clusterCounterDevice, uint32_t(1));
@@ -884,6 +944,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           << " threads in total" << std::endl;
 
     std::cout << "In the kernel... " << std::endl;
+
+
 
     // std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
 
