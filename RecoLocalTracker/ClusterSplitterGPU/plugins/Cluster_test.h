@@ -19,7 +19,7 @@
 #include <alpaka/alpaka.hpp>
 
 constexpr int maxSubClusters = 20;
-constexpr int maxPixels = 100;
+constexpr int maxPixels = 200;
 
 // This represent a per-cluster data needed in the Splitting algorithm
 struct clusterProperties {
@@ -30,6 +30,12 @@ struct clusterProperties {
     float cls[maxSubClusters];
     float oldclx[maxSubClusters];
     float oldcly[maxSubClusters];
+
+    // Copy the pixels from the SoA into original to keep them aligned to the following arrays
+    float originalpixels_x[maxPixels];
+    float originalpixels_y[maxPixels];
+    float originalpixels_ADC[maxPixels];
+    float originalpixels_rawIdArr[maxPixels];
 
     // These are used to store temporary pixel information
     uint32_t pixelCounter;                // how many pixels in the cluster under study
