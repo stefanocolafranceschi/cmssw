@@ -6,21 +6,21 @@ process = cms.Process("RECOOOOOO")
 process.load("Configuration.StandardSequences.Services_cff")
 process.load("Configuration.StandardSequences.MagneticField_cff")
 process.load("Configuration.Geometry.GeometryRecoDB_cff")
+process.load('Configuration.StandardSequences.RawToDigi_cff')
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 process.load("RecoLocalTracker.SiPixelRecHits.PixelCPEGeneric_cfi")
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
 
-# Load beam spot (optional)
-process.load("RecoVertex.BeamSpotProducer.BeamSpot_cff")
-
 # Load Pixel Clusterizer
 process.load("RecoLocalTracker.SiPixelClusterizer.siPixelClustersPreSplitting_cff")
 
+process.load('Configuration.StandardSequences.Reconstruction_cff')
+
 # Define the JetCoreClusterSplitter EDProducer
 process.jetCoreClusterSplitter = cms.EDProducer("JetCoreClusterSplitter",
-    pixelClusters         = cms.InputTag('siPixelClusters'),  # Input pixel clusters
+    pixelClusters         = cms.InputTag('siPixelClustersPreSplitting'),
     vertices              = cms.InputTag('offlinePrimaryVertices'),
     pixelCPE              = cms.string("PixelCPEGeneric"),
     verbose               = cms.bool(False),
@@ -36,8 +36,10 @@ process.jetCoreClusterSplitter = cms.EDProducer("JetCoreClusterSplitter",
 )
 
 # Define the process path
+process.raw2digi_step = cms.Path(process.RawToDigi_pixelOnly)
 process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplitting)
 process.jetCoreClusterSplitter_step = cms.Path(process.jetCoreClusterSplitter)
+process.reconstruction_step1 = cms.Path(process.reconstruction_pixelTrackingOnly)
 
 # Input source
 process.source = cms.Source("PoolSource",
@@ -60,7 +62,9 @@ process.out = cms.EndPath(process.RECOSIMoutput)
 
 # Set the schedule
 process.schedule = cms.Schedule(
+    process.raw2digi_step,
     process.siPixelClustersPreSplitting_step,
+    #process.reconstruction_step1,
     process.jetCoreClusterSplitter_step,
     process.out
 )
