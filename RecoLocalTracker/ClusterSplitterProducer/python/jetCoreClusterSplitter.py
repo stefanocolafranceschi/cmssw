@@ -2,13 +2,18 @@ import FWCore.ParameterSet.Config as cms
 
 process = cms.Process("RECOOOOOO")
 
+#from Configuration.ProcessModifiers.alpaka_cff import alpaka
+#process = cms.Process("RECOOOOOO",alpaka)
+
 # Standard services, geometry, magnetic field, and GlobalTag
 process.load("Configuration.StandardSequences.Services_cff")
 process.load("Configuration.StandardSequences.MagneticField_cff")
 process.load("Configuration.Geometry.GeometryRecoDB_cff")
+process.load("RecoLocalTracker.SiStripClusterizer.SiStripClusterChargeCut_cfi")
 process.load('Configuration.StandardSequences.RawToDigi_cff')
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
 process.load("RecoLocalTracker.SiPixelRecHits.PixelCPEGeneric_cfi")
+
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
@@ -20,7 +25,7 @@ process.load('Configuration.StandardSequences.Reconstruction_cff')
 
 # Define the JetCoreClusterSplitter EDProducer
 process.jetCoreClusterSplitter = cms.EDProducer("JetCoreClusterSplitter",
-    pixelClusters         = cms.InputTag('siPixelClustersPreSplitting'),
+    pixelClusters = cms.InputTag('siPixelClustersPreSplitting', '', 'RECO'),
     vertices              = cms.InputTag('offlinePrimaryVertices'),
     pixelCPE              = cms.string("PixelCPEGeneric"),
     verbose               = cms.bool(False),
@@ -43,7 +48,7 @@ process.reconstruction_step1 = cms.Path(process.reconstruction_pixelTrackingOnly
 
 # Input source
 process.source = cms.Source("PoolSource",
-    fileNames = cms.untracked.vstring('file:step3ok.root')
+    fileNames = cms.untracked.vstring('file:step3my.root')
 )
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 

@@ -9,7 +9,7 @@ process.load('Configuration.StandardSequences.MagneticField_cff')
 process.load('Configuration.StandardSequences.Services_cff')
 process.load("Configuration.Geometry.GeometryRecoDB_cff")
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
-process.load("RecoLocalTracker.SiPixelClusterizer.siPixelClustersPreSplitting_cff")
+#process.load("RecoLocalTracker.SiPixelClusterizer.siPixelClustersPreSplitting_cff")
 process.load("RecoLocalTracker.SiStripClusterizer.SiStripClusterChargeCut_cfi")
 process.load("RecoLocalTracker.SiPixelRecHits.SiPixelRecHits_cfi")
 process.load("RecoLocalTracker.SiPixelRecHits.PixelCPEESProducers_cff")
@@ -38,7 +38,7 @@ process.trial = cms.EDProducer(
     "trial",
     nHits=cms.uint32(100),
     offset=cms.int32(10),
-    ptMin=cms.double(70),
+    ptMin=cms.double(100),
     deltaR=cms.double(0.05),
     chargeFracMin=cms.double(2.0),
     tanLorentzAngle=cms.double(0.001),
@@ -52,8 +52,11 @@ process.trial = cms.EDProducer(
     forceYError=cms.double(150),
     fractionalWidth=cms.double(0.4),
     siPixelClusters=cms.InputTag("siPixelClustersPreSplittingAlpaka"),
+    #siPixelClusters = cms.InputTag("siPixelClustersPreSplittingAlpaka", "", "RECO"),
     siPixelDigis=cms.InputTag("siPixelClustersPreSplittingAlpaka"),
+    #siPixelDigis =cms.InputTag("siPixelClustersPreSplittingAlpaka", "", "RECO"),
     trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka"),
+    #trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka", "", "RECO"),
     candidateInput=cms.InputTag("candidateDataSoA"),
     zVertex=cms.InputTag("pixelVerticesAlpaka"),
     geometryInput=cms.InputTag("candidateDataSoA"),
@@ -61,7 +64,7 @@ process.trial = cms.EDProducer(
 )
 
 process.offlineBeamSpotDevice_step = cms.Path(process.offlineBeamSpotDevice)
-process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplittingAlpaka)
+#process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplittingAlpaka)
 process.HelperSplitter_step = cms.Path(process.candidateDataSoA)
 process.siPixelRecHitsPreSplitting_step = cms.Path(process.siPixelRecHitsPreSplittingAlpaka)
 #process.pixelVertexing_step = cms.Path(process.recopixelvertexing)
@@ -70,7 +73,7 @@ process.trial_step = cms.Path(process.trial)
 
 # Set the schedule so that HelperSplitter runs before trial
 process.schedule = cms.Schedule(
-    process.siPixelClustersPreSplitting_step,
+    #process.siPixelClustersPreSplitting_step,
     process.HelperSplitter_step,
     process.siPixelRecHitsPreSplitting_step,
     #process.pixelVertexing_step,  
@@ -82,7 +85,7 @@ process.schedule = cms.Schedule(
 # Input and Output Configuration
 #-----------------------------------------------------------------
 process.source = cms.Source("PoolSource",
-    fileNames = cms.untracked.vstring('file:step3.root')
+    fileNames = cms.untracked.vstring('file:step3my.root')
 )
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 

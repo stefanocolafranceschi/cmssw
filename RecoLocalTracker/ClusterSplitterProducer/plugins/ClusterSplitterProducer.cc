@@ -263,6 +263,32 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
       //if (verbose_) std::cout << "Processing detIt, DetId: " << detIt->id() << ", Number of Clusters: " << detIt->size() << std::endl;
       const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
       const GeomDet* det = trackingGeometry.idToDet(detset.id());
+
+/*
+    int clusterIndex = 0;  // Keep track of cluster index
+
+    // Loop over clusters in this detector
+    for (auto cluster = detset.begin(); cluster != detset.end(); ++cluster, ++clusterIndex) {
+        const SiPixelCluster& aCluster = *cluster;
+        std::vector<SiPixelCluster::Pixel> originalpixels = aCluster.pixels();
+
+        // Print cluster information
+        std::cout << "Detector ID: " << detset.id()
+                  << ", Cluster " << clusterIndex
+                  << ", Pixels: " << originalpixels.size() << std::endl;
+
+        // Loop over pixels in this cluster
+        for (unsigned int j = 0; j < originalpixels.size(); j++) {
+            const SiPixelCluster::Pixel& pixel = originalpixels[j];
+            std::cout << "  Pixel " << j << ": ("
+                      << pixel.x << ", " << pixel.y
+                      << "), ADC: " << pixel.adc << std::endl;
+        }
+    }
+*/
+
+
+
       if (!det) continue;
 
       const PixelTopology& topo = static_cast<const PixelTopology&>(det->topology());
