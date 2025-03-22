@@ -21,7 +21,6 @@
 #include "Geometry/CommonDetUnit/interface/GlobalTrackingGeometry.h"
 #include "Geometry/CommonTopologies/interface/PixelTopology.h"
 #include "Geometry/Records/interface/GlobalTrackingGeometryRecord.h"
-#include "DataFormats/GeometryVector/interface/VectorUtil.h"
 #include "RecoTracker/TkDetLayers/interface/GeometricSearchTracker.h"
 #include "DataFormats/TrackerCommon/interface/TrackerTopology.h"
 #include "DataFormats/JetReco/interface/Jet.h"
@@ -31,7 +30,10 @@
 #include "DataFormats/VertexSoA/interface/ZVertexDevice.h"
 #include "DataFormats/VertexSoA/interface/alpaka/ZVertexSoACollection.h"
 
+#include "DataFormats/GeometryVector/interface/VectorUtil.h"
 #include "DataFormats/GeometryVector/interface/Basic3DVector.h"
+#include "DataFormats/GeometrySurface/interface/SOARotation.h"
+
 #include "DataFormats/Math/interface/SSEVec.h"
 #include "DataFormats/Math/interface/ExtVec.h"
 
@@ -40,6 +42,7 @@
 
 #include "DataFormats/CandidateSoA/interface/CandidatesSoA.h"
 #include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
+
 
 #include "Cluster_test.h"
 
@@ -250,16 +253,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
 
-            //const char* info = "TESTA";
-            //if (globalThreadId == 0) printDebug(acc, digiView, clusterView, info);
-            //if (globalThreadId == 0) printf("Cl_SoA entry = %u\nCl_SoA moduleStart = %u\nCl_SoA clusInModule = %u\nCl_SoA moduleId = %u\nCl_SoA clusModuleStart = %u\n----\n", n, clusterView.moduleStart(n), clusterView.clusInModule(n), clusterView.moduleId(n), clusterView.clusModuleStart(n));
-
-            //printf("\nglobalThreadId = %u ", globalThreadId );
-
-/////////////////////////////////////////////////////
 /*
-            // Printout the entire ClusterSoA
+            /////////////////////////////////////////////////////
             if (globalThreadId == 0) {
+
+                // Printout the entire ClusterSoA
                 for (uint32_t cluster = 0; cluster < static_cast<uint32_t>(clusterView.metadata().size()); cluster++) {
                     printf("Cluster %u | moduleStart: %u | clusInModule: %u | moduleId: %u | clusModuleStart: %u\n",
                            cluster,
@@ -268,16 +266,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                            clusterView.moduleId(cluster),
                            clusterView.clusModuleStart(cluster));
                 }
-            }
-*/
 
-
-            // Printout the entire DigiSoA
-            if (globalThreadId == 0) {
-
-                
+                // Printout the entire DigiSoA              
                 for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
-
                     printf("Pixel %u | clus: %d | moduleID: %u | rawIdArr: %u | adc: %u | pdigi: %u | xx: %u | yy: %u\n",
                                pixel,
                                digiView.clus(pixel),
@@ -288,10 +279,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                digiView.xx(pixel),
                                digiView.yy(pixel));
                 }
+
+                // Printout the entire geoClusterSoA
+                for (uint32_t cluster = 0; cluster < static_cast<uint32_t>(geoclusterView.metadata().size()); cluster++) {
+                    printf("MYgeoCluster, Module %u | ClusterOffset: %u | x: %f | y: %f | z: %f \n",
+                           geoclusterView.moduleId(cluster),
+                           geoclusterView.clusterOffset(cluster),
+                           geoclusterView.x(cluster),
+                           geoclusterView.y(cluster),
+                           geoclusterView.z(cluster));
+                }
             }
-
-/////////////////////////////////////////////////////
-
+            /////////////////////////////////////////////////////
+*/
 
             // Get total Clusters and Candidates
             uint32_t numClusters = static_cast<uint32_t>(geoclusterView.metadata().size());
@@ -299,13 +299,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             // Ensure only valid threads process clusters
             if (globalThreadId < numClusters-2) {
-            //if ( globalThreadId == 841 ) {
 
-                if ( globalThreadId == 0 ) {
-                    *clusterCounterDevice = 0;
-                }
+                if ( globalThreadId == 0 ) *clusterCounterDevice = 0;
 
-                uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
+                // REMEMBER that clusterIdx has to be+1
+                // when accessing geoclusterView!!
+                // ------------------------------
+                // CHANGE THIS IN PRODUCTION!!!!
+                //uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
+                uint32_t clusterIdx = 327;
+
+
+
                 uint32_t moduleId = geoclusterView.moduleId(clusterIdx);
                 uint32_t clusterOffset = geoclusterView.clusterOffset(clusterIdx);
 
@@ -314,30 +319,27 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 // - `clusterOffset`: The cluster number within that module
 
 
-/*
-                if ( (moduleId==273) && (clusterOffset==3) ) {
-                    for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
-                        if ( static_cast<uint32_t>(digiView.moduleId(pixel)) == moduleId) {
-                            if ( static_cast<uint32_t>(digiView.clus(pixel)) == clusterOffset) {
-                                printf("--------------------------------  clus: %d | moduleID: %u | rawIdArr: %u | adc: %u | pdigi: %u | xx: %u | yy: %u\n",
-                                       //clusterIdx,
-                                       digiView.clus(pixel),
-                                       digiView.moduleId(pixel),
-                                       digiView.rawIdArr(pixel),
-                                       digiView.adc(pixel),                               
-                                       digiView.pdigi(pixel),
 
-                                       digiView.xx(pixel),
-                                       digiView.yy(pixel));
-                            }
+/*
+                // Print all about this cluster under study.........
+                for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
+                    if ( static_cast<uint32_t>(digiView.moduleId(pixel)) == moduleId) {
+                        if ( static_cast<uint32_t>(digiView.clus(pixel)) == clusterOffset) {
+                            printf("--  clus: %d | moduleID: %u | rawIdArr: %u | adc: %u | pdigi: %u | xx: %u | yy: %u CLX: %f CLY: %f CLZ: %f\n",
+                                   digiView.clus(pixel),
+                                   digiView.moduleId(pixel),
+                                   digiView.rawIdArr(pixel),
+                                   digiView.adc(pixel),                               
+                                   digiView.pdigi(pixel),
+                                   digiView.xx(pixel),
+                                   digiView.yy(pixel),
+                                   geoclusterView.x(clusterIdx+1),
+                                   geoclusterView.y(clusterIdx+1), 
+                                   geoclusterView.z(clusterIdx+1));                            
                         }
                     }
                 }
-                else {
-                    //return;
-                }
 */
-
 
                 //printf("I am in thread %u, analyzing cluster %u from module %u offset %u\n", 
                 //       globalThreadId, clusterOffset, moduleId, clusterOffset);
@@ -359,37 +361,74 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         return;
                     }
 
-                    // Extract jet direction components correctly
-                    float jetPx = candidateView.px(candIdx);
-                    float jetPy = candidateView.py(candIdx);
-                    float jetPz = candidateView.pz(candIdx);
 
-                    // Compute jet eta and phi
-                    float jetEta = 0.5 * log((sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz) + jetPz) /
-                                              (sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz) - jetPz));
-                    float jetPhi = atan2(jetPy, jetPx);
+// --- Extract jet momentum components from candidateView ---
+float jetPx = candidateView.px(candIdx);
+float jetPy = candidateView.py(candIdx);
+float jetPz = candidateView.pz(candIdx);
 
-                    float clusterEta;
-                    float clusterPhi;
+// Compute jet transverse momentum, eta, and phi
+float jetPt = sqrt(jetPx * jetPx + jetPy * jetPy);
+float jetP  = sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz);
+float jetEta = 0.5 * log((jetP + jetPz) / (jetP - jetPz));
+float jetPhi = atan2(jetPy, jetPx);
 
-                    // Access hit global positions (Rechits are indexed just like clustergeo)
-                    float x = hitView.xGlobal(clusterIdx);
-                    float y = hitView.yGlobal(clusterIdx);
-                    float z = hitView.zGlobal(clusterIdx);
 
-                    // Compute eta and phi
-                    float r = sqrt(x * x + y * y + z * z);
-                    clusterEta = 0.5 * log((r + z) / (r - z));
-                    clusterPhi = atan2(y, x);
+// --- Print the jet information ---
+printf("Jet Information:\n");
+printf("  jetPx = %f, jetPy = %f, jetPz = %f\n", jetPx, jetPy, jetPz);
+printf("  jetPt = %f, jetEta = %f, jetPhi = %f\n\n", jetPt, jetEta, jetPhi);
 
-                    // Compute deltaR properly
-                    float deltaEta = clusterEta - jetEta;
-                    float deltaPhi = atan2(sin(clusterPhi - jetPhi), cos(clusterPhi - jetPhi)); // Proper phi difference handling
-                    float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
+// Access hit global positions from hitView for the cluster (below fine tuned!)
+//float x = hitView.xGlobal(clusterIdx);
+//float y = hitView.yGlobal(clusterIdx);
+//float z = hitView.zGlobal(clusterIdx);
 
-                    //printf("deltaR = %f  deltaR_ = %f", deltaR, deltaR_);
+// Access fine tuned global position (previously saved into the GeoCluster SoA)
+float x = geoclusterView.x(clusterIdx);
+float y = geoclusterView.y(clusterIdx);
+float z = geoclusterView.z(clusterIdx);
+
+printf("Original Cluster Global Position (from geocluster):\n");
+printf("  x = %f, y = %f, z = %f\n", x, y, z);
+
+// Subtract the primary vertex position to obtain the relative position
+float relX = x;
+float relY = y;
+float relZ = z - static_cast<float>(vertexView.zv()[0]);;
+
+printf("\nPrimary Vertex Position, vertexZ = %f\n", static_cast<float>(vertexView.zv()[0]));
+printf("Relative Cluster Position (cluster - vertex):\n");
+printf("  relX = %f, relY = %f, relZ = %f\n", relX, relY, relZ);
+
+
+
+// --- Compute the cluster's relative eta and phi ---
+float r = sqrt(relX * relX + relY * relY + relZ * relZ);
+float clusterEta = 0.5 * log((r + relZ) / (r - relZ));
+float clusterPhi = atan2(relY, relX);
+printf("\nComputed Relative Cluster Direction:\n");
+printf("  r = %f, clusterEta = %f, clusterPhi = %f\n", r, clusterEta, clusterPhi);
+
+// --- Compute differences and deltaR ---
+float deltaEta = clusterEta - jetEta;
+float deltaPhi = atan2(sin(clusterPhi - jetPhi), cos(clusterPhi - jetPhi));
+float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
+printf("\nDeltaR Calculation:\n");
+printf("  deltaEta = %f, deltaPhi = %f, deltaR = %f\n", deltaEta, deltaPhi, deltaR);
+
+// Optionally, also print the absolute cluster position (without vertex subtraction)
+// For comparison:
+float abs_r = sqrt(x*x + y*y + z*z);
+float absClusterEta = 0.5 * log((abs_r + z) / (abs_r - z));
+float absClusterPhi = atan2(y, x);
+printf("\nAbsolute Cluster Direction (no vertex subtraction):\n");
+printf("  r = %f, eta = %f, phi = %f\n", abs_r, absClusterEta, absClusterPhi);
+
+                    printf("deltaR = %f  deltaR_ = %f", deltaR, deltaR_); //is it 0.0182885?
 
                     // Check deltaR condition and split clusters if applicable
+
                     if (deltaR < deltaR_) {
                         printf("This cluster: %u has deltaR < deltaR_ and it might be split\n",clusterIdx);
 
@@ -420,10 +459,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         storeOutputDigis(acc, digiView, outputDigis, moduleId, clusterOffset, clusterCounterDevice);
                     }
                 }
-            }
-            else {
-                return;
-            }
+        }
+        else {
+            return;
+        }
 
             //info = "TESTB";
             //if (globalThreadId == 0) printDebug(acc, digiView, clusterView, info);
@@ -644,16 +683,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             float tanLorentzAngles = geoclusterView.tanLorentzAngles(clusterIdx);
 
             // Apply precomputed transformation matrix
-            float jetDirLocalX = geoclusterView.transformXX(clusterIdx) * jetPx + geoclusterView.transformXY(clusterIdx) * jetPy + geoclusterView.transformXZ(clusterIdx) * jetPz;
-            float jetDirLocalY = geoclusterView.transformYX(clusterIdx) * jetPx + geoclusterView.transformYY(clusterIdx) * jetPy + geoclusterView.transformYZ(clusterIdx) * jetPz;
-            float jetDirLocalZ = geoclusterView.transformZX(clusterIdx) * jetPx + geoclusterView.transformZY(clusterIdx) * jetPy + geoclusterView.transformZZ(clusterIdx) * jetPz;
+            float jetDirLocalX = geoclusterView.transformXX(clusterIdx) * jetPx + geoclusterView.transformYX(clusterIdx) * jetPy + geoclusterView.transformZX(clusterIdx) * jetPz;
+            float jetDirLocalY = geoclusterView.transformXY(clusterIdx) * jetPx + geoclusterView.transformYY(clusterIdx) * jetPy + geoclusterView.transformZY(clusterIdx) * jetPz;
+            float jetDirLocalZ = geoclusterView.transformXZ(clusterIdx) * jetPx + geoclusterView.transformYZ(clusterIdx) * jetPy + geoclusterView.transformZZ(clusterIdx) * jetPz;
 
             // Now, proceed with your calculations
             float jetTanAlpha = jetDirLocalX / jetDirLocalZ;
             float jetTanBeta = jetDirLocalY / jetDirLocalZ;
-
             float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
 
+// ALL calculation fully tested up to here
+//return;
             float expSizeX = expSizeXAtLorentzAngleIncidence_ +
                              std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngles));
             float expSizeY = std::sqrt((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
@@ -975,11 +1015,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     // Get the number of items per block (threads per block)
     const uint32_t threadsPerBlock = 128;
 
+
     // Calculate how many groups (blocks) you need for each view
     const uint32_t numBlocks = (geoclusterView.metadata().size() + threadsPerBlock - 1) / threadsPerBlock;
   
-    const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
-    //const auto MyworkDiv = make_workdiv<Acc1D>(1, 917);  //setting 916 and beyond crash!
+////const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
+    const auto MyworkDiv = make_workdiv<Acc1D>(1, 1);  //setting one thread only
 
     std::cout << "\nGot candidateView.metadata().size()=" << candidateView.metadata().size(); 
     std::cout << "\nGot geoclusterView.metadata().size()=" << geoclusterView.metadata().size()

@@ -18,6 +18,7 @@ process.load('Configuration.EventContent.EventContent_cff')
 #process.load('RecoVertex.BeamSpotProducer.BeamSpot_cff')
 process.load('RecoTracker.PixelTrackFitting.PixelTracks_cff')
 process.load('Configuration.StandardSequences.Reconstruction_cff')
+process.load("RecoLocalTracker.SiPixelRecHits.PixelCPEGeneric_cfi")
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
@@ -28,6 +29,7 @@ process.candidateDataSoA = cms.EDProducer("HelperSplitter",
     siPixelClusters = cms.InputTag("siPixelClustersPreSplitting"),
     siPixelClustersSoA=cms.InputTag("siPixelClustersPreSplittingAlpaka"),
     ptMin = cms.double(70),
+    pixelCPE = cms.string("PixelCPEGeneric"),
     tanLorentzAngle = cms.double(0.0),
     tanLorentzAngleBarrelLayer1 = cms.double(0.0),
     verbose = cms.bool(True)
