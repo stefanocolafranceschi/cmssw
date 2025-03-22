@@ -166,7 +166,9 @@ int counter=0;
     }
     for (auto cluster = detset.begin(); cluster != detset.end(); cluster++, counter++) {
       const SiPixelCluster& aCluster = *cluster;
-std::cout << "Detector " <<  detset.id() << " clusterID " << counter << std::endl;
+
+      std::vector<SiPixelCluster::Pixel> originalpixels = aCluster.pixels();    
+      std::cout << "Detector " <<  detset.id() << " clusterID " << counter << " with these pixels: " <<  originalpixels.size() << std::endl;
 
       bool hasBeenSplit = false;
       bool shouldBeSplit = false;
@@ -174,7 +176,7 @@ std::cout << "Detector " <<  detset.id() << " clusterID " << counter << std::end
           det->surface().toGlobal(pp->localParametersV(aCluster, (*geometry->idToDetUnit(detIt->id())))[0].first);
       GlobalPoint ppv(pv.position().x(), pv.position().y(), pv.position().z());
       GlobalVector clusterDir = cPos - ppv;
-
+/*
 std::cout << "Cluster direction (cPos - vertex):" 
           << " dx = " << clusterDir.x() 
           << " dy = " << clusterDir.y() 
@@ -201,12 +203,12 @@ float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
 std::cout << "DeltaEta: " << deltaEta 
           << " DeltaPhi: " << deltaPhi 
           << " DeltaR: " << deltaR << std::endl;
-
+*/
       for (unsigned int ji = 0; ji < cores->size(); ji++) {
         if ((*cores)[ji].pt() > ptMin_) {
           const reco::Candidate& jet = (*cores)[ji];
           GlobalVector jetDir(jet.px(), jet.py(), jet.pz());
-
+/*
 // Print out all relevant jet properties:
 std::cout << "Jet details, number =" << ji << std::endl;
 std::cout << "  jet.px()        = " << jet.px() << std::endl;
@@ -215,22 +217,15 @@ std::cout << "  jet.pz()        = " << jet.pz() << std::endl;
 
 
 std::cout << "deltaR = " << Geom::deltaR(jetDir, clusterDir) << std::endl;
-
+*/
           if (Geom::deltaR(jetDir, clusterDir) < deltaR_) {
             // check if the cluster has to be splitted
 
             LocalVector jetDirLocal = det->surface().toLocal(jetDir);
-printf("jetDirLocalX %f\n", jetDirLocal.x());
-printf("jetDirLocalY %f\n", jetDirLocal.y());
-printf("jetDirLocalZ %f\n", jetDirLocal.z());
 
             float jetTanAlpha = jetDirLocal.x() / jetDirLocal.z();
             float jetTanBeta = jetDirLocal.y() / jetDirLocal.z();
             float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
-
-std::cout << "jetTanAlpha = " << jetTanAlpha << std::endl;
-std::cout << "jetTanBeta = " << jetTanBeta << std::endl;            
-std::cout << "jetZOverRho = " << jetZOverRho << std::endl;
 
             float expSizeX = expSizeXAtLorentzAngleIncidence_ +
                              std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngle));

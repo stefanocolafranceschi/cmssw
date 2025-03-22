@@ -253,6 +253,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
 
+            uint32_t moduleId;
+            uint32_t clusterOffset;                    
+
 /*
             /////////////////////////////////////////////////////
             if (globalThreadId == 0) {
@@ -302,25 +305,31 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                 if ( globalThreadId == 0 ) *clusterCounterDevice = 0;
 
-                // REMEMBER that clusterIdx has to be+1
-                // when accessing geoclusterView!!
-                // ------------------------------
+
                 // CHANGE THIS IN PRODUCTION!!!!
                 //uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
                 uint32_t clusterIdx = 327;
 
+                // Search for the clusterIdx that is matching the ModuleID and the ClusterOffset
+                // as the correspondence between SiPixelCluster vs SiPixelClusterSoA is not 1:1 (it's 99%..)
+                uint32_t RetrievedModule = geoclusterView.moduleId(clusterIdx);
+                uint32_t RetrievedClusterOffset = geoclusterView.clusterOffset(clusterIdx);
 
-
-                uint32_t moduleId = geoclusterView.moduleId(clusterIdx);
-                uint32_t clusterOffset = geoclusterView.clusterOffset(clusterIdx);
-
-                // Now we have:
+                for (uint32_t ScanningCluster = 0; ScanningCluster < static_cast<uint32_t>(clusterView.metadata().size()); ScanningCluster++) {
+                    if ( ( RetrievedModule == clusterView.moduleId(ScanningCluster) ) && ( RetrievedClusterOffset <= clusterView.clusInModule(ScanningCluster) ) ) {
+                        moduleId = clusterView.moduleId(ScanningCluster);
+                        clusterOffset = clusterView.moduleStart(ScanningCluster) + clusterView.clusModuleStart(ScanningCluster);                    
+                    }
+                    else {
+                        // The SoA doesn't have that cluster..
+                        return;
+                    }
+                }
+                // From the above, now we have:
                 // - `moduleId`: The module this cluster belongs to
                 // - `clusterOffset`: The cluster number within that module
 
 
-
-/*
                 // Print all about this cluster under study.........
                 for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
                     if ( static_cast<uint32_t>(digiView.moduleId(pixel)) == moduleId) {
@@ -339,7 +348,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         }
                     }
                 }
-*/
+
 
                 //printf("I am in thread %u, analyzing cluster %u from module %u offset %u\n", 
                 //       globalThreadId, clusterOffset, moduleId, clusterOffset);

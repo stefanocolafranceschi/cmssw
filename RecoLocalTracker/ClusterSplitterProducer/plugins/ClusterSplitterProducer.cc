@@ -322,7 +322,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             //          << ", Global Position: (x = " << cPos.x() 
             //          << ", y = " << cPos.y() 
             //          << ", z = " << cPos.z() << ")" << std::endl;
-            ++clusterIndex;
+            //++clusterIndex;
         }
     }
 
