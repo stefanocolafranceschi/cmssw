@@ -23,6 +23,14 @@ process.load('RecoVertex.BeamSpotProducer.BeamSpot_cff')
 
 process.load('Configuration.StandardSequences.Reconstruction_cff')
 
+process.load("DQMServices.Core.DQMStore_cfi")
+process.load("DQMServices.Components.DQMFileSaver_cfi")
+process.load("DQMServices.Components.DQMStoreStats_cfi")
+
+process.dqmSaver.workflow = cms.untracked.string('/MyTest/JetCoreClusterSplitter/Timing')
+process.dqmSaver.forceRunNumber = cms.untracked.int32(1)
+process.dqmSaver.saveAtJobEnd = cms.untracked.bool(True)
+
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase1_2024_realistic', '')
 
@@ -66,13 +74,34 @@ process.trial = cms.EDProducer(
     candidateInput=cms.InputTag("candidateDataSoA"),
     #zVertex=cms.InputTag("pixelVerticesAlpaka"),
     geometryInput=cms.InputTag("candidateDataSoA"),
-    verbose=cms.bool(True),
-    debugMode = cms.bool(True),             #is True, only one cluster will be analyzed
+    verbose=cms.bool(False),
+    debugMode = cms.bool(False),             #is True, only one cluster will be analyzed
     targetDetId = cms.int32(304181256),
     targetClusterOffset = cms.int32(2),
     targetEvent = cms.int32(1),    
     vertices = cms.InputTag('offlinePrimaryVertices'),
 )
+
+process.FastTimerService = cms.Service("FastTimerService",
+    printEventSummary        = cms.untracked.bool(True),  # Print summary at the end
+    printRunSummary          = cms.untracked.bool(False),
+    printJobSummary          = cms.untracked.bool(True),  # Print total job performance
+    enableDQM                = cms.untracked.bool(True),  # Enable DQM monitoring
+    enableDQMbyModule        = cms.untracked.bool(True),  # Track time per module
+    enableDQMbyPathActive    = cms.untracked.bool(True),  # Time per active path
+    enableDQMbyPathTotal     = cms.untracked.bool(True),  # Total time per path
+    enableDQMbyProcesses     = cms.untracked.bool(False), # If using subprocesses
+    writeJSONSummary = cms.untracked.bool(True),
+    jsonFileName = cms.untracked.string('resources'),
+)
+
+# DQM File Saver (Saves monitoring histograms)
+process.dqmSaver.workflow = cms.untracked.string('/JetCoreClusterSplitter/Reco/DQMTest')
+process.dqmSaver.convention = cms.untracked.string('Offline')
+process.dqmSaver.saveByRun = cms.untracked.int32(-1)
+process.dqmSaver.saveAtJobEnd = cms.untracked.bool(True)
+process.dqm_step = cms.Path(process.dqmSaver)  # DQM Step
+
 
 process.offlineBeamSpotDevice_step = cms.Path(process.offlineBeamSpotDevice)
 process.siPixelClustersPreSplitting_step = cms.Path(process.siPixelClustersPreSplittingAlpaka)
@@ -91,16 +120,18 @@ process.schedule = cms.Schedule(
     #process.beamSpotProducer_step,
     process.HelperSplitter_step,
     #process.pixelVertexing_step,  
-    process.trial_step
+    process.trial_step,
+    process.dqm_step    
 )
 
 #-----------------------------------------------------------------
 # Input and Output Configuration
 #-----------------------------------------------------------------
 process.source = cms.Source("PoolSource",
-    fileNames = cms.untracked.vstring('file:step3my.root')
+    #fileNames = cms.untracked.vstring('file:step3my.root')
+    fileNames = cms.untracked.vstring('file:largestep3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(999))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

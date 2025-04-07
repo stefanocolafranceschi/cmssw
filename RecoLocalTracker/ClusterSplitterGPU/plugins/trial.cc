@@ -117,7 +117,7 @@ private:
   double fractionalWidth_;
   const edm::EDGetTokenT<SiPixelClustersHost> clusterToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisToken_;
-  //const edm::EDGetTokenT<SiPixelClustersHost> digisToken_;  
+  //const edm::EDGetTokenT<SiPixelClustersHost> digisToken_;
   //const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clusterToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::CandidatesSoACollection> candidateToken_;
@@ -129,6 +129,7 @@ private:
   int targetClusterOffset;
   int targetEvent;
   edm::EDGetTokenT<reco::VertexCollection> vertices_;
+  const device::EDPutToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> outputdigisToken_;
   std::vector<Device> devices_;  
 };
 
@@ -161,11 +162,11 @@ trial::trial(edm::ParameterSet const& iConfig)
       targetDetId(iConfig.getParameter<int>("targetDetId")),
       targetClusterOffset(iConfig.getParameter<int>("targetClusterOffset")),
       targetEvent(iConfig.getParameter<int>("targetEvent")),
-      vertices_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertices"))) 
+      vertices_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertices"))),
+      outputdigisToken_{produces()}
       {
           devices_ = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
           rootFile_ = new TFile("config_output.root", "RECREATE");
-          //produces<std::vector<int>>("outputHits");
       }
 
 
@@ -348,19 +349,20 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             verbose_, debugMode, targetDetId, targetClusterOffset, queue);
 
 
-
         // Update from device to host
         //alpaka::memcpy(queue, gpuSharedHost, gpuSharedDevice);  // Copy device buffer to host buffer
         //alpaka::wait(queue);  // Ensure the transfer is complete
 //        tkHit.updateFromDevice(queue);
 
         //TrackingRecHitHost<pixelTopology::Phase1> hostRecHits = cms::alpakatools::CopyToHost<TrackingRecHitDevice<pixelTopology::Phase1, Device>>::copyAsync(queue, tkHit);
-        //SiPixelDigisHost digisHost = cms::alpakatools::CopyToHost<SiPixelDigisDevice<Device>>::copyAsync(queue, tkDigi);
+        SiPixelDigisHost digisHost = cms::alpakatools::CopyToHost<SiPixelDigisDevice<Device>>::copyAsync(queue, tkDigi);
         //SiPixelClustersHost clustersHost = cms::alpakatools::CopyToHost<SiPixelClustersDevice<Device>>::copyAsync(queue, tkClusters);
 //        SiPixelDigisHost outputDigisHost = cms::alpakatools::CopyToHost<SiPixelDigisDevice<Device>>::copyAsync(queue, tkOutputDigis);
 //        SiPixelClustersHost outputClustersHost = cms::alpakatools::CopyToHost<SiPixelClustersDevice<Device>>::copyAsync(queue, tkOutputClusters);
 
         alpaka::wait(queue);
+        //deviceEvent.put(std::move(digisHost));
+        deviceEvent.emplace(outputdigisToken_, std::move(tkOutputDigis) );
     }
        
 }
