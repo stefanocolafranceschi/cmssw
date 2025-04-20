@@ -19,34 +19,7 @@
 #include <alpaka/alpaka.hpp>
 
 constexpr int maxSubClusters = 20;
-constexpr int maxPixels = 800;
-
-/*
-// This represent a per-cluster data needed in the Splitting algorithm
-struct clusterProperties {
-
-    // These are used to split original cluster into subclusters
-    float clx[maxSubClusters];
-    float cly[maxSubClusters];
-    float cls[maxSubClusters];
-    float oldclx[maxSubClusters];
-    float oldcly[maxSubClusters];
-
-    // These are used to store temporary pixel information
-    uint32_t pixelCounter;                   // how many pixels in the cluster under study
-    uint32_t pixels[maxPixels];              // Storing the index of the pixel
-    int pixel_X[maxPixels];                  // X position of each pixel
-    int pixel_Y[maxPixels];                  // Y position of each pixel
-    uint32_t pixel_ADC[maxPixels];           // adc value of each pixel
-    uint32_t rawIdArr[maxPixels];            // RawAddress of each pixel
-
-    // thse are used for k-map like algorithm and scoring
-    int scoresIndices[maxPixels];           // need this because can't do map
-    float scoresValues[maxPixels];          // need this because can't do map
-
-    int clusterForPixel[maxPixels];
-};
-*/
+constexpr int maxPixels = 2000;
 
 using namespace reco;
 

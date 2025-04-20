@@ -80,7 +80,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       double forceXError_, double forceYError_,
                                       float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,
                                       bool verbose_, bool debugMode, int targetDetId, int targetClusterOffset) const {
-// 4.64
 
             // Get thread and grid indices
             auto threadIdx = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]; // Thread index within the block
@@ -133,7 +132,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             // Get total Clusters and Candidates
             uint32_t numClusters = static_cast<uint32_t>(geoclusterView.metadata().size());
             uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
-//4.5
 
             // Ensure only valid threads process clusters
             if (globalThreadId < numClusters-2) {
@@ -143,7 +141,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
                 moduleId = geoclusterView.moduleId(clusterIdx);
                 clusterOffset = geoclusterView.clusterOffset(clusterIdx);
-//5.15
 
                 if (debugMode) {
                     //uint32_t clusterIdx = 327;
@@ -162,7 +159,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         }
                     }
                 }
-//4.64
 
 /*
                 // Print all about this cluster under study.........
@@ -189,12 +185,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 //       globalThreadId, clusterOffset, moduleId, clusterOffset);
 
 
-// 4.6
                 // Access fine-tuned Global position (previously saved into the GeoCluster SoA)
                 float x = geoclusterView.x(clusterIdx);
                 float y = geoclusterView.y(clusterIdx);
                 float z = geoclusterView.z(clusterIdx);
-// 4.6
+
 
 
                 for (uint32_t candIdx = 0; candIdx < numCandidates; ++candIdx) {
@@ -223,7 +218,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     float jetPy = candidateView.py(candIdx);
                     float jetPz = candidateView.pz(candIdx);
 
-//4.6
+
                     // Compute jet transverse momentum, eta, and phi
                     float jetPt = sqrt(jetPx * jetPx + jetPy * jetPy);
                     float jetP  = sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz);
@@ -245,24 +240,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     float deltaPhi = atan2(sin(clusterPhi - jetPhi), cos(clusterPhi - jetPhi));  // Adjust for periodicity
                     float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
                     //printf("  deltaEta = %f, deltaPhi = %f, deltaR = %f\n", deltaEta, deltaPhi, deltaR);
-// 4.9
+
 
                     int ClusterCharge = 0;
+
                     // Check deltaR condition and split clusters if applicable
                     if (deltaR < deltaR_) {
                         if (verbose_) printf("This clusterOffset: %u has deltaR < deltaR_ and it might be split\n",clusterOffset);
 
-/*
-                        uint32_t pixelCounter=0;
-                        for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); j++) {
-                            if ( static_cast<uint32_t>(digiView.moduleId(j)) == moduleId) {
-                                if ( static_cast<uint32_t>(digiView.clus(j)) == clusterOffset) {
-                                    pixelCounter++;                                    
-                                    ClusterCharge = ClusterCharge + digiView.adc(j);
-                                }
-                            }
-                        }
-*/
                         uint32_t begin = geoclusterView.pixelStart(clusterIdx);
                         uint32_t end = begin + geoclusterView.pixelCount(clusterIdx);
                         uint32_t pixelCounter = end - begin;
@@ -270,8 +255,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         for (uint32_t i = begin; i < end; ++i) {
                             ClusterCharge += digiView.adc(i);
                         }
-
-//return;
 
                         if (verbose_) {
                             printf("Working on Detector Module %u clusterOffset %u with these pixels: %u\n", moduleId, clusterOffset, pixelCounter);
@@ -440,7 +423,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             int scoresIndices[maxPixels];
             float scoresValues[maxPixels];
             int clusterForPixel[maxPixels];
-            float weightOfPixel[maxPixels];
+            //float weightOfPixel[maxPixels];
             bool split = false;
 
             //float pitchX = geoclusterView.pitchX(clusterIdx);
@@ -528,12 +511,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                         for (int k = 0; k < sub; ++k) {
                             if (k == sub - 1) {
-                                perDiv = digiView.adc(jj) - perDiv * k;  // Adjust for the last pixel
+                                perDiv = digiView.adc(jj) - perDiv * k;
                             }
 
                             if (pixelsSize >= maxPixels - 1) return;
 
-                            pixels[pixelsSize]      = j;  // use j, not jj, to maintain logic as in original
+                            pixels[pixelsSize]      = j; 
                             pixel_X[pixelsSize]     = digiView.xx(jj);
                             pixel_Y[pixelsSize]     = digiView.yy(jj);
                             pixel_ADC[pixelsSize]   = perDiv;
@@ -712,10 +695,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             // Update best-fit cluster assignment
                                             cls[cl] += pixel_ADC[subpixel];
                                             clusterForPixel[subpixel_counter] = cl;
-                                            weightOfPixel[subpixel_counter] = maxEst;
+                                            //weightOfPixel[subpixel_counter] = maxEst;
 
-                                            if (verbose_) printf("Pixel weight weightOfPixel[%d]=%.4f  cl=%d\n",
-                                                                 subpixel_counter, weightOfPixel[subpixel_counter], cl);
+                                            //if (verbose_) printf("Pixel weight weightOfPixel[%d]=%.4f  cl=%d\n",
+                                            //                     subpixel_counter, weightOfPixel[subpixel_counter], cl);
                                         }
                                     }
                                 }
