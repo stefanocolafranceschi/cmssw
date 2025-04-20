@@ -117,6 +117,7 @@ private:
   float tanLorentzAngle_;
   float tanLorentzAngleBarrelLayer1_;  
   edm::EDGetTokenT<SiPixelClusterCollectionNew> clusterToken_;
+  //edm::EDGetTokenT<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> SoAclusterToken_;  
   //const edm::EDGetTokenT<SiPixelClustersHost> SoAclusterToken_;
   edm::EDGetTokenT<edm::View<reco::Candidate>> candidateToken_;
   edm::ESGetToken<GlobalTrackingGeometry, GlobalTrackingGeometryRecord> const tTrackingGeom_;
@@ -138,6 +139,7 @@ HelperSplitter::HelperSplitter(edm::ParameterSet const& iConfig)
       tanLorentzAngleBarrelLayer1_(iConfig.getParameter<double>("tanLorentzAngleBarrelLayer1")),
       //clusterToken_(consumes<SiPixelClusterCollectionNew>(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
       clusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
+      //SoAclusterToken_(consumes<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection>(edm::InputTag("siPixelClusters"))),      
       //SoAclusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClustersSoA"))),
       candidateToken_(consumes<edm::View<reco::Candidate>>(iConfig.getParameter<edm::InputTag>("Candidate"))),
       tTrackingGeom_(esConsumes()),
@@ -299,25 +301,37 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
         float transformYX = localY.x(), transformYY = localY.y(), transformYZ = localY.z();
         float transformZX = localZ.x(), transformZY = localZ.y(), transformZZ = localZ.z();
 
+        // Store the first pixel index per module
+        std::unordered_map<uint32_t, size_t> moduleStartPixelIdx;
+
         unsigned int localClusterIdx = 0;
 
-        // Loop over the clusters in this detector
+        // Only set this once per module — after calculating moduleId
+        if (moduleStartPixelIdx.find(moduleId) == moduleStartPixelIdx.end()) {
+            moduleStartPixelIdx[moduleId] = pixelIdx;
+        }
 
+        // Loop over the clusters in this detector
         for (const auto& cluster : detset) {
             const SiPixelCluster& aCluster = cluster;
             std::vector<SiPixelCluster::Pixel> originalpixels = aCluster.pixels();
 
+            // Record pixelStart before adding pixels
+            uint32_t pixelStart = pixelIdx;
+            uint32_t pixelCount = originalpixels.size();
 
             // Fill GeoCluster SoA with necessary data
             geoclusterView.moduleId(clusterIndex) = moduleId;
             geoclusterView.clusterOffset(clusterIndex) = localClusterIdx;
+            geoclusterView.pixelStart(clusterIndex) = pixelStart;
+            geoclusterView.pixelCount(clusterIndex) = pixelCount;
 
             // Fill digiSoA with pixel information
             for (const auto& pixel : originalpixels) {
                 digiView.xx(pixelIdx) = pixel.x;
-                digiView.yy(pixelIdx) = pixel.y;                
+                digiView.yy(pixelIdx) = pixel.y;
                 digiView.adc(pixelIdx) = pixel.adc;
-                digiView.clus(pixelIdx) = localClusterIdx;                
+                digiView.clus(pixelIdx) = localClusterIdx;
                 digiView.rawIdArr(pixelIdx) = detset.id();
                 digiView.moduleId(pixelIdx) = moduleId;
                 pixelIdx++;
@@ -337,6 +351,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             geoclusterView.x(clusterIndex) = cPos.x();
             geoclusterView.y(clusterIndex) = cPos.y();
             geoclusterView.z(clusterIndex) = cPos.z();
+            geoclusterView.moduleStart(clusterIndex) = moduleStartPixelIdx[moduleId];
             geoclusterView.transformXX(clusterIndex) = transformXX;
             geoclusterView.transformXY(clusterIndex) = transformXY;
             geoclusterView.transformXZ(clusterIndex) = transformXZ;
@@ -347,25 +362,8 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             geoclusterView.transformZY(clusterIndex) = transformZY;
             geoclusterView.transformZZ(clusterIndex) = transformZZ;
 
-            // Debug printout for the cluster
-            //td::cout << "Processing clusterIndex = " << clusterIndex 
-            //          << ", detset id = " << detset.id() 
-            //          << ", module = " << moduleId
-            //          << ", offset = " << localClusterIdx
-            //          << ", pixels = " << originalpixels.size()  
-            //          << ", csizeX = " << aCluster.sizeX()
-            //          << ", csizeY = " << aCluster.sizeY()                                 
-            //          << ", clusterOffset = " << geoclusterView.clusterOffset(clusterIndex)
-            //          << ", Global Position: (x = " << cPos.x() 
-            //          << ", y = " << cPos.y() 
-            //          << ", z = " << cPos.z() << ")" 
-            //          << std::endl;
-
-            ++clusterIndex;
-
-            // Adjust cluster offset
+            clusterIndex++;
             localClusterIdx++;
-
         }
     }
 

@@ -179,7 +179,10 @@ trial::~trial() {
 
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
 
+std::cout << "BBBBBBBBBBB" << std::endl;
+
     if ((debugMode) && (deviceEvent.id().event() != static_cast<edm::EventNumber_t>(targetEvent))) {
+        std::cout << "Skipping this event" << std::endl;
         return;
     }
 
@@ -234,7 +237,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         auto moduleStartD =
             cms::alpakatools::make_device_buffer<uint32_t[]>(queue, pixelTopology::Phase1::numberOfModules + 1);
         alpaka::memcpy(queue, moduleStartD, moduleStartH);
-        alpaka::wait(queue);            // Ensure the data copy is complete
+//        alpaka::wait(queue);            // Ensure the data copy is complete
 
         if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
 
@@ -270,7 +273,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         if (verbose_) std::cout << "SiPixelClustersSoACollection done " << nClusters << std::endl;
 
         alpaka::memcpy(queue, tkClusters.buffer(), clusters.buffer());
-        alpaka::wait(queue);  // Ensure copy is finished before checking
+//        alpaka::wait(queue);  // Ensure copy is finished before checking
 
 
         /* Candidates*/
@@ -302,30 +305,31 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         // The output SoA are initialized with the input ones (in case no cluster will be split)
 
         alpaka::memcpy(queue, tkHit.buffer(), recHits.buffer());
-        alpaka::wait(queue);  // Ensure copy is finished before checking
+//        alpaka::wait(queue);  // Ensure copy is finished before checking
 
         alpaka::memcpy(queue, tkDigi.buffer(), digis.buffer());
-        alpaka::wait(queue);  // Ensure copy is finished before checking
+//        alpaka::wait(queue);  // Ensure copy is finished before checking
 
         //alpaka::memcpy(queue, tkClusters.buffer(), clusters.buffer());
         //alpaka::memcpy(queue, tkVertices.buffer(), zVertices.buffer());
         //alpaka::wait(queue);  // Ensure copy is finished before checking
 
         alpaka::memcpy(queue, tkCandidates.buffer(), candidates.buffer());
-        alpaka::wait(queue);  // Ensure copy is finished before checking
+//        alpaka::wait(queue);  // Ensure copy is finished before checking
 
         alpaka::memcpy(queue, tkgeoclusters.buffer(), clustergeometry.buffer());
-        alpaka::wait(queue);  // Ensure copy is finished before checking
+//        alpaka::wait(queue);  // Ensure copy is finished before checking
 
         if (verbose_) std::cout << "Most memcpy done" << std::endl;
-
+/*
         // Handling the per cluster calculation attributes in a struct
         std::vector<clusterProperties> gpuAlgo;
         auto clusterPropertiesHost = cms::alpakatools::make_host_buffer<clusterProperties[]>(queue, nClusters);
         auto clusterPropertiesDevice = cms::alpakatools::make_device_buffer<clusterProperties[]>(queue, nClusters);
         std::copy(gpuAlgo.begin(), gpuAlgo.end(), clusterPropertiesHost.data());
         alpaka::memcpy(queue, clusterPropertiesDevice, clusterPropertiesHost);
-        alpaka::wait(queue);  // Ensure copy is finished before checking
+*/
+//        alpaka::wait(queue);  // Ensure copy is finished before checking
         
         if (verbose_) std::cout << "All memcpy done" << std::endl;
 
@@ -343,7 +347,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_, 
             centralMIPCharge_, chargePerUnit_, fractionalWidth_, 
             tkOutputDigis.view(), tkOutputClusters.view(), 
-            clusterPropertiesDevice.data(), clusterCounterDevice.data(),
+            //clusterPropertiesDevice.data(), 
+            clusterCounterDevice.data(),
             forceXError_, forceYError_, 
             vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
             verbose_, debugMode, targetDetId, targetClusterOffset, queue);
