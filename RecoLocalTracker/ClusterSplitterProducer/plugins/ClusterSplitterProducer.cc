@@ -326,6 +326,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             geoclusterView.pixelStart(clusterIndex) = pixelStart;
             geoclusterView.pixelCount(clusterIndex) = pixelCount;
 
+            uint32_t ClusterCharge = 0;
             // Fill digiSoA with pixel information
             for (const auto& pixel : originalpixels) {
                 digiView.xx(pixelIdx) = pixel.x;
@@ -334,7 +335,8 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
                 digiView.clus(pixelIdx) = localClusterIdx;
                 digiView.rawIdArr(pixelIdx) = detset.id();
                 digiView.moduleId(pixelIdx) = moduleId;
-                pixelIdx++;
+                ClusterCharge = ClusterCharge + pixel.adc;
+                pixelIdx++;                
             }
 
             // Use PixelCluster Parameter Estimator (CPE) to compute local parameters
@@ -351,6 +353,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             geoclusterView.x(clusterIndex) = cPos.x();
             geoclusterView.y(clusterIndex) = cPos.y();
             geoclusterView.z(clusterIndex) = cPos.z();
+            geoclusterView.ClusterCharge(clusterIndex) = ClusterCharge;
             geoclusterView.moduleStart(clusterIndex) = moduleStartPixelIdx[moduleId];
             geoclusterView.transformXX(clusterIndex) = transformXX;
             geoclusterView.transformXY(clusterIndex) = transformXY;

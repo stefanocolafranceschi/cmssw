@@ -336,6 +336,10 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         // Handling a global counter of the output (new) clusters (initialized to zero here)
         auto clusterCounterDevice = cms::alpakatools::make_device_buffer<uint32_t>(queue);
         alpaka::memset(queue, clusterCounterDevice, 0);
+
+        auto pixelCounterDevice = cms::alpakatools::make_device_buffer<uint32_t>(queue);
+        alpaka::memset(queue, pixelCounterDevice, 0);
+
         alpaka::wait(queue);  // Ensure the transfer is complete
 
 
@@ -349,6 +353,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
             tkOutputDigis.view(), tkOutputClusters.view(), 
             //clusterPropertiesDevice.data(), 
             clusterCounterDevice.data(),
+            pixelCounterDevice.data(),
             forceXError_, forceYError_, 
             vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
             verbose_, debugMode, targetDetId, targetClusterOffset, queue);

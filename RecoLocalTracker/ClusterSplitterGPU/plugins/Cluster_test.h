@@ -19,7 +19,7 @@
 #include <alpaka/alpaka.hpp>
 
 constexpr int maxSubClusters = 20;
-constexpr int maxPixels = 2000;
+constexpr int maxPixels = 1000;
 
 using namespace reco;
 
@@ -44,6 +44,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
                   SiPixelClustersSoAView& outputClusters,
                   //clusterProperties* clusterPropertiesDevice,
                   uint32_t* clusterCounterDevice,
+                  uint32_t* pixelCounterDevice,                  
                   double forceXError_,
                   double forceYError_,
                   float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,
