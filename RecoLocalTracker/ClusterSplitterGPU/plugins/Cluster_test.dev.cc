@@ -89,7 +89,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
-            uint32_t moduleId;
+            uint16_t moduleId;
             uint32_t clusterOffset;
 /*
             /////////////////////////////////////////////////////
@@ -362,7 +362,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             TAcc const& acc,
             const SiPixelDigisSoAConstView digiView,
             SiPixelDigisSoAView outputDigis,
-            uint32_t moduleId,
+            uint16_t moduleId,
             uint32_t clusterOffset,
             uint32_t begin,
             uint32_t end,            
@@ -431,7 +431,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         SiPixelDigisSoAConstView digiView,
                                         SiPixelClustersSoAConstView clusterView,
                                         uint32_t clusterIdx,
-                                        uint32_t moduleId,
+                                        uint16_t moduleId,
                                         uint32_t clusterOffset,  
                                         float jetPx, float jetPy, float jetPz,
                                         ClusterGeometrysSoAView geoclusterView,
@@ -462,7 +462,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             int pixel_X[maxPixels];
             int pixel_Y[maxPixels];
             uint32_t pixel_ADC[maxPixels];
-            uint32_t rawIdArr[maxPixels];
+            uint32_t rawIdArr;
 
             float clx[maxSubClusters];
             float cly[maxSubClusters];
@@ -470,10 +470,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             float oldclx[maxSubClusters];
             float oldcly[maxSubClusters];
 
-            int scoresIndices[maxPixels];
-            float scoresValues[maxPixels];
+            int scoresIndices[pixelsPerCluster];
+            float scoresValues[pixelsPerCluster];
+
             int clusterForPixel[maxPixels];
-            //float weightOfPixel[maxPixels];
+
+            float weightOfPixel[maxPixels];
             bool split = false;
 
             //float pitchX = geoclusterView.pitchX(clusterIdx);
@@ -493,7 +495,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
 
 
-
             float expSizeX = expSizeXAtLorentzAngleIncidence_ +
                              std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngles));
             float expSizeY = std::sqrt((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
@@ -504,18 +505,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             if (expSizeY < 1.f) expSizeY = 1.f;
 
             float expectedADC = std::sqrt(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
-/*
-            int kk=0;
-            for (uint32_t j = 0; j < static_cast<uint32_t>(digiView.metadata().size()); j++) {
-                if ( static_cast<uint32_t>(digiView.moduleId(j)) == moduleId) {
-                    if ( static_cast<uint32_t>(digiView.clus(j)) == clusterOffset) {                        
-                        originalpixels_x[ kk ] = digiView.xx(j); // Copy x-coordinate from original pixel
-                        originalpixels_y[ kk ] = digiView.yy(j); // Copy y-coordinate from original pixel
-                        kk++;
-                    }
-                }
-            }
-*/
 
             if (verbose_) printf("Trying to split: charge=%d expSizeX=%f expSizeY=%f\n",
                     static_cast<int>(ClusterCharge), expSizeX, expSizeY);
@@ -529,8 +518,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             if (split) {
 
                 // Aligning to the original "fittingSplit" variables..
-                int sizeY = expSizeY;
                 int sizeX = expSizeX;
+                int sizeY = expSizeY;
                 unsigned int meanExp = std::floor( ClusterCharge / expectedADC + 0.5f);
 
 
@@ -572,7 +561,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             pixel_X[pixelsSize]     = digiView.xx(jj);
                             pixel_Y[pixelsSize]     = digiView.yy(jj);
                             pixel_ADC[pixelsSize]   = perDiv;
-                            rawIdArr[pixelsSize]    = digiView.rawIdArr(jj);
+                            rawIdArr    = digiView.rawIdArr(jj);
                             ++pixelsSize;
                         }
                     }
@@ -592,6 +581,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Refactored kernel with corrected distance scoring logic
                     while (!stop && remainingSteps > 0) {
+                    //for (int step = 0; step < 100; ++step) {
                         if (verbose_) printf("---------------\n");
                         if (verbose_) printf("REMAINING STEPS : %d\n", remainingSteps);
                         remainingSteps--;
@@ -673,95 +663,94 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             }
                         }
 
+                        // Caching coordinates for faster access in the following Scores Indices/Values iterations
+                        float pixelX_cache[maxPixels];
+                        float pixelY_cache[maxPixels];
+
+                        // Precompute coordinates
+                        for (uint32_t jj = begin, matchIdx = 0; jj < end && matchIdx < maxPixels; ++jj, ++matchIdx) {
+                            pixelX_cache[matchIdx] = digiView.xx(jj);
+                            pixelY_cache[matchIdx] = digiView.yy(jj);
+
+                        }
+
                         // Iterating over Scores Indices and Values
-                        for (unsigned int i = 0; i < pixelCounter; i++) {
-                            if (i < maxPixels) {
-                                int pixel_index = scoresIndices[i];
+                        for (unsigned int i = 0; i < pixelCounter && i < maxPixels; ++i) {
+                            int pixel_index = scoresIndices[i];
+                            int subpixel_counter = 0;
 
-                                int subpixel_counter = 0;
+                            for (unsigned int subpixel = 0; subpixel < pixelsSize && subpixel < maxPixels; ++subpixel, ++subpixel_counter) {
 
-                                // Iterating over subpixels
-                                for (unsigned int subpixel = 0; subpixel < pixelsSize; subpixel++, subpixel_counter++) {
-                                    if (subpixel < maxPixels) {
-                                        if (pixels[subpixel] > static_cast<uint32_t>(pixel_index)) {
-                                            break;
-                                        } else if (pixels[subpixel] != static_cast<uint32_t>(pixel_index)) {
-                                            continue;
-                                        } else {
-                                            float maxEst = 0.f;
-                                            int cl = -1;
+                                if (pixels[subpixel] > static_cast<uint32_t>(pixel_index)) break;
+                                if (pixels[subpixel] != static_cast<uint32_t>(pixel_index)) continue;
 
+                                float maxEst = 0.f;
+                                int cl = -1;
 
-                                            // On-the-fly coordinate lookup for this pixel
-                                            float temp_originalpixels_x = 0.f;
-                                            float temp_originalpixels_y = 0.f;
+                                // Cached coordinates - to reenable this later
+                                float temp_originalpixels_x = pixelX_cache[pixel_index];
+                                float temp_originalpixels_y = pixelY_cache[pixel_index];
 
-                                            for (uint32_t jj = begin, matchIdx = 0; jj < end; ++jj, ++matchIdx) {
-                                                if (matchIdx == static_cast<uint32_t>(pixel_index)) {
-                                                    temp_originalpixels_x = digiView.xx(jj);
-                                                    temp_originalpixels_y = digiView.yy(jj);
-                                                    break;
-                                                }
-                                            }
+                                for (unsigned int subcluster_index = 0; subcluster_index < meanExp && subcluster_index < maxSubClusters; ++subcluster_index) {
+                                    // Cache clx, cly and cls in registers
+                                    float cx = clx[subcluster_index];
+                                    float cy = cly[subcluster_index];
+                                    float clusterSignal = cls[subcluster_index];
 
-                                            // Loop over subclusters to compute score
-                                            for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                                                if (subcluster_index < maxSubClusters) {
+                                    float dx = temp_originalpixels_x - cx;
+                                    float dy = temp_originalpixels_y - cy;
 
-                                                    float distanceX = temp_originalpixels_x - clx[subcluster_index];
-                                                    float distanceY = temp_originalpixels_y - cly[subcluster_index];
+                                    float absX = std::abs(dx);
+                                    float absY = std::abs(dy);
 
-                                                    float dist = 0.f;
+                                    float dist = 0.f;
 
-                                                    if (std::abs(distanceX) > sizeX / 2.f) {
-                                                        dist += (std::abs(distanceX) - sizeX / 2.f + 1.f) * (std::abs(distanceX) - sizeX / 2.f + 1.f);
-                                                    } else {
-                                                        dist += (2.f * distanceX / sizeX) * (2.f * distanceX / sizeX);
-                                                    }
+                                    if (absX > sizeX / 2.f) {
+                                        float delta = absX - sizeX / 2.f + 1.f;
+                                        dist += delta * delta;
+                                    } else {
+                                        float norm = 2.f * dx / sizeX;
+                                        dist += norm * norm;
+                                    }
 
-                                                    if (std::abs(distanceY) > sizeY / 2.f) {
-                                                        dist += (std::abs(distanceY) - sizeY / 2.f + 1.f) * (std::abs(distanceY) - sizeY / 2.f + 1.f);
-                                                    } else {
-                                                        dist += (2.f * distanceY / sizeY) * (2.f * distanceY / sizeY);
-                                                    }
+                                    if (absY > sizeY / 2.f) {
+                                        float delta = absY - sizeY / 2.f + 1.f;
+                                        dist += delta * delta;
+                                    } else {
+                                        float norm = 2.f * dy / sizeY;
+                                        dist += norm * norm;
+                                    }
 
-                                                    float distance = std::sqrt(dist);
+                                    float distance = std::sqrt(dist);
 
-                                                    float nsig = (cls[subcluster_index] - expectedADC) /
-                                                                 (expectedADC * fractionalWidth_);
-                                                    float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f;
-                                                    float clDest = 1.f / (distance + 0.05f);
+                                    float nsig = (clusterSignal - expectedADC) / (expectedADC * fractionalWidth_);
+                                    float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f;
+                                    float clDest = 1.f / (distance + 0.05f);
+                                    float est = clQest * clDest;
 
-                                                    float est = clQest * clDest;
-                                                    if (est > maxEst) {
-                                                        cl = subcluster_index;
-                                                        maxEst = est;
-                                                    }
-                                                }
-                                            }
-
-                                            // Update best-fit cluster assignment
-                                            cls[cl] += pixel_ADC[subpixel];
-                                            clusterForPixel[subpixel_counter] = cl;
-                                            //weightOfPixel[subpixel_counter] = maxEst;
-
-                                            //if (verbose_) printf("Pixel weight weightOfPixel[%d]=%.4f  cl=%d\n",
-                                            //                     subpixel_counter, weightOfPixel[subpixel_counter], cl);
-                                        }
+                                    if (est > maxEst) {
+                                        cl = subcluster_index;
+                                        maxEst = est;
                                     }
                                 }
+
+                                // Update best-fit cluster assignment
+                                cls[cl] += pixel_ADC[subpixel];
+                                clusterForPixel[subpixel_counter] = cl;
+                                //weightOfPixel[subpixel_counter] = maxEst;
+                                //if (verbose_) printf("Pixel weight weightOfPixel[%d]=%.4f  cl=%d\n",
+                                //                     subpixel_counter, weightOfPixel[subpixel_counter], cl);
+
                             }
                         }
 
-
-//-------- this part seems a bottleneck (14 to 160)
 
                         // Recompute cluster centers
                         if (verbose_) printf("Recomputing cluster centers.........\n");
 
                         stop = true;
                         for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                            if (subcluster_index < maxSubClusters-1) {
+                            //if (subcluster_index < maxSubClusters-1) {
                                 if (std::abs(clx[subcluster_index] - oldclx[subcluster_index]) > 0.01f)
                                     stop = false; // still moving
                                 if (std::abs(cly[subcluster_index] - oldcly[subcluster_index]) > 0.01f)
@@ -771,21 +760,22 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 clx[subcluster_index] = 0;
                                 cly[subcluster_index] = 0;
                                 cls[subcluster_index] = 1e-38f;//1e-99;
-                            }
+                            //}
                         }
 
                         for (unsigned int pixel_index = 0; pixel_index < pixelsSize; pixel_index++) {
-                            if (pixel_index < maxPixels-1) {
-                                if (clusterForPixel[pixel_index] < 0)
-                                    continue;
+                            //if (pixel_index < maxPixels-1) {
+                            //    if (clusterForPixel[pixel_index] < 0)
+                            //        continue;
 
                                 clx[ clusterForPixel[pixel_index] ] += pixel_X[pixel_index] * pixel_ADC[pixel_index];
                                 cly[ clusterForPixel[pixel_index] ] += pixel_Y[pixel_index] * pixel_ADC[pixel_index];
                                 cls[ clusterForPixel[pixel_index] ] += pixel_ADC[pixel_index];
-                            }
+                            //}
                         }
+
                         for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                            if (subcluster_index < maxSubClusters-1) {                            
+                            //if (subcluster_index < maxSubClusters-1) {                            
                                 if (cls[subcluster_index] != 0) {
                                     clx[subcluster_index] /= cls[subcluster_index];
                                     cly[subcluster_index] /= cls[subcluster_index];
@@ -793,10 +783,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 if (verbose_) printf("Center for cluster, clx[%u]=%f cly[%u]=%f\n",subcluster_index, clx[subcluster_index], subcluster_index, cly[subcluster_index]);
 
                                 cls[subcluster_index] = 0;
-                            }
+                            //}
                         }
                     }
-//--------------
                     
 
                     //storeOutputDigis
@@ -826,8 +815,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         pixel_X[k] == pixel_X[j] &&
                                         pixel_Y[k] == pixel_Y[j] &&
                                         clusterForPixel[k] == cl) {
-                                        pixel_ADC[j] += pixel_ADC[k];
-                                        pixel_ADC[k] = 0;
+                                            pixel_ADC[j] += pixel_ADC[k];
+                                            pixel_ADC[k] = 0;
                                     }
                                 }
 
@@ -838,7 +827,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 outputDigis.xx(outIdx)        = pixel_X[j];
                                 outputDigis.yy(outIdx)        = pixel_Y[j];
                                 outputDigis.adc(outIdx)       = pixel_ADC[j];
-                                outputDigis.rawIdArr(outIdx)  = rawIdArr[j];
+                                outputDigis.rawIdArr(outIdx)  = rawIdArr;
                                 outputDigis.moduleId(outIdx)  = moduleId;
 
                                 if (verbose_) {

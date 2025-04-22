@@ -275,7 +275,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
         const GeomDetUnit* genericDet = geom_->idToDetUnit(detset.id());
         auto const gind = genericDet->index();
         //std::cout << "gind " << static_cast<uint32_t>(gind) << std::endl;
-        uint32_t moduleId = static_cast<uint32_t>(gind);
+        uint16_t moduleId = static_cast<uint16_t>(gind);
 
         // Convert detset.id() to DetId
         DetId detId(detset.id());
