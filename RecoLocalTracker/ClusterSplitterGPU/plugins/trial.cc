@@ -126,7 +126,7 @@ private:
   bool verbose_;
   bool debugMode;
   int targetDetId;
-  int targetClusterOffset;
+  uint16_t targetClusterOffset;
   int targetEvent;
   edm::EDGetTokenT<reco::VertexCollection> vertices_;
   const device::EDPutToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> outputdigisToken_;
