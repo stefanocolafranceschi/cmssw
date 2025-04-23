@@ -548,7 +548,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                    j, pixelsSize, pixelsSize + sub, meanExp, digiView.xx(jj), digiView.yy(jj), sub);
                         }
 
-                        for (uint16_t k = 0; k < sub; ++k) {
+                        for (uint8_t k = 0; k < sub; ++k) {
                             if (k == sub - 1) {
                                 perDiv = digiView.adc(jj) - perDiv * k;
                             }
@@ -566,7 +566,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                     // Compute the initial values, set all distances and centers to -999
                     if (verbose_) printf("Computing initial values, set all distances");
-                    for (uint16_t j = 0; j < meanExp; j++) {
+                    for (uint8_t j = 0; j < meanExp; j++) {
                         oldclx[j] = -999;
                         oldcly[j] = -999;
                         clx[j] = digiView.xx(firstOccurrence) + j;
@@ -610,7 +610,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     continue;
                                 }
 
-                                for (uint16_t subClusterIdx = 0; subClusterIdx < meanExp; subClusterIdx++) {
+                                for (uint8_t subClusterIdx = 0; subClusterIdx < meanExp; subClusterIdx++) {
                                     float distanceX = static_cast<float>(temp_originalpixels_x) - clx[subClusterIdx];
                                     float distanceY = static_cast<float>(temp_originalpixels_y) - cly[subClusterIdx];
 
@@ -689,7 +689,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 float temp_originalpixels_x = pixelX_cache[pixel_index];
                                 float temp_originalpixels_y = pixelY_cache[pixel_index];
 
-                                for (uint16_t subcluster_index = 0; subcluster_index < meanExp && subcluster_index < maxSubClusters; ++subcluster_index) {
+                                for (uint8_t subcluster_index = 0; subcluster_index < meanExp && subcluster_index < maxSubClusters; ++subcluster_index) {
                                     // Cache clx, cly and cls in registers
                                     float cx = clx[subcluster_index];
                                     float cy = cly[subcluster_index];
@@ -747,7 +747,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         if (verbose_) printf("Recomputing cluster centers.........\n");
 
                         stop = true;
-                        for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
+                        for (uint8_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
                             //if (subcluster_index < maxSubClusters-1) {
                                 if (std::abs(clx[subcluster_index] - oldclx[subcluster_index]) > 0.01f)
                                     stop = false; // still moving
@@ -772,7 +772,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             //}
                         }
 
-                        for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
+                        for (uint8_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
                             //if (subcluster_index < maxSubClusters-1) {                            
                                 if (cls[subcluster_index] != 0) {
                                     clx[subcluster_index] /= cls[subcluster_index];
@@ -787,7 +787,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     
 
                     //storeOutputDigis
-                    for (uint16_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
+                    for (uint8_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
                         // Reserve a new cluster index (only once per subcluster)
                         uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
 
