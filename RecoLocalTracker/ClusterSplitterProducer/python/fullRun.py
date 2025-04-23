@@ -74,8 +74,8 @@ process.trial = cms.EDProducer(
     candidateInput=cms.InputTag("candidateDataSoA"),
     #zVertex=cms.InputTag("pixelVerticesAlpaka"),
     geometryInput=cms.InputTag("candidateDataSoA"),
-    verbose=cms.bool(True),
-    debugMode = cms.bool(True),             #is True, only one cluster will be analyzed
+    verbose=cms.bool(False),
+    debugMode = cms.bool(False),             #is True, only one cluster will be analyzed
     targetDetId = cms.int32(304181256),
     targetClusterOffset = cms.int32(2),
     targetEvent = cms.int32(1),    
@@ -128,11 +128,11 @@ process.schedule = cms.Schedule(
 # Input and Output Configuration
 #-----------------------------------------------------------------
 process.source = cms.Source("PoolSource",
-    fileNames = cms.untracked.vstring('file:step3my.root')
-    #fileNames = cms.untracked.vstring('file:largestep3.root')
+    #fileNames = cms.untracked.vstring('file:step3my.root')
+    fileNames = cms.untracked.vstring('file:largestep3.root')
     #fileNames = cms.untracked.vstring('file:/gpu_data/store/relval/CMSSW_15_0_0/RelValTTbar_14TeV/GEN-SIM-DIGI-RAW/PU_142X_mcRun3_2025_realistic_v7_STD_2025_PU-v3/2580000/1c2caeef-e246-4b6d-bebc-4fb6df4f9bbd.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(999))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

@@ -91,6 +91,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
             uint16_t moduleId;
             uint32_t clusterOffset;
+
 /*
             /////////////////////////////////////////////////////
             if (globalThreadId == 0) {
@@ -164,6 +165,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     }
                 }
 
+                uint32_t begin = geoclusterView.pixelStart(clusterIdx);
+                uint32_t end = begin + geoclusterView.pixelCount(clusterIdx);                
+                uint32_t pixelCounter = end - begin;
+                uint32_t ClusterCharge = geoclusterView.ClusterCharge(clusterIdx);
+
+                if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
+                    // Avoid crash if the end is kinda wrong/overflown
+                    return;
+                }
+
+
 /*
                 // Print all about this cluster under study.........
                 for (uint32_t pixel = 0; pixel < static_cast<uint32_t>(digiView.metadata().size()); pixel++) {
@@ -193,12 +205,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 float x = geoclusterView.x(clusterIdx);
                 float y = geoclusterView.y(clusterIdx);
                 float z = geoclusterView.z(clusterIdx);
-
-
-                uint32_t begin = geoclusterView.pixelStart(clusterIdx);
-                uint32_t end = begin + geoclusterView.pixelCount(clusterIdx);
-                uint32_t pixelCounter = end - begin;
-                uint32_t ClusterCharge = geoclusterView.ClusterCharge(clusterIdx);
 
 /*
                 int ClusterCharge = 0;
@@ -274,6 +280,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         }
 */
 
+/*
+                        if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
+                            if (verbose_) printf("ERROR with digi index");
+                            return;
+                        }
+*/
+
+                        //printf("TEST, begin=%d end=%d size=%d\n", begin, end, digiView.metadata().size());
 
                         if (verbose_) {
                             printf("Working on Detector Module %u clusterOffset %u with these pixels: %u\n", moduleId, clusterOffset, pixelCounter);
@@ -528,8 +542,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     if (verbose_) printf("cluster has meanExp=%d\n", meanExp);
 
                     uint16_t pixelsSize = 0;
-                    uint32_t begin = geoclusterView.pixelStart(clusterIdx);
-                    uint32_t end = begin + geoclusterView.pixelCount(clusterIdx);
+                    //uint32_t begin = geoclusterView.pixelStart(clusterIdx);
+                    //uint32_t end = begin + geoclusterView.pixelCount(clusterIdx);
                     uint32_t firstOccurrence = begin;
                     rawIdArr = digiView.rawIdArr(begin);
 
@@ -827,6 +841,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 outputDigis.adc(outIdx)       = pixel_ADC[j];
                                 outputDigis.rawIdArr(outIdx)  = rawIdArr;
                                 outputDigis.moduleId(outIdx)  = moduleId;
+
+                                printf("NSplit cl=%d pixel_X[%d]=%d pixel_Y[%d]=%d ADC=%d \n",
+                                           cl, j, pixel_X[j], j, pixel_Y[j], pixel_ADC[j]);
 
                                 if (verbose_) {
                                     printf("Split cl=%d pixel_X[%d]=%d pixel_Y[%d]=%d ADC=%d\n",
