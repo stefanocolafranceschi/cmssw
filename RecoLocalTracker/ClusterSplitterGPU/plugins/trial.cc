@@ -186,6 +186,8 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         return;
     }
 
+//if (deviceEvent.id().event() !=6) return;
+
     if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
 
     // Ensure we're selecting the first available GPU device
@@ -204,6 +206,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
     auto const& clusters = deviceEvent.get(clusterToken_);
     auto const& digis = deviceEvent.get(digisToken_);
+
     auto const& recHits = deviceEvent.get(recHitsToken_);
     //auto const& zVertices = deviceEvent.get(zVertexToken_);
     auto const& candidates = deviceEvent.get(candidateToken_);
@@ -237,7 +240,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         auto moduleStartD =
             cms::alpakatools::make_device_buffer<uint32_t[]>(queue, pixelTopology::Phase1::numberOfModules + 1);
         alpaka::memcpy(queue, moduleStartD, moduleStartH);
-//        alpaka::wait(queue);            // Ensure the data copy is complete
+        alpaka::wait(queue);            // Ensure the data copy is complete
 
         if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
 
@@ -258,7 +261,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         but it's not templated so <pixelTopology> won't work
         I could also: SiPixelDigisDevice<Device> digisDevice(nDigis, queue); */
 
-        size_t nDigis = digis.view().metadata().size();
+        size_t nDigis = digis.view().metadata().size()-1;
         SiPixelDigisSoACollection tkDigi(nDigis, queue);
         //tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
         if (verbose_) std::cout << "SiPixelDigisSoACollection done " << nDigis << std::endl;
@@ -268,7 +271,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         /* Clusters
            the SiPixelClustersSoACollection is an alias for: SiPixelClustersDevice (gpu) 
                                                              SiPixelClustersHost (cpu)  */
-        size_t nClusters = clusters.view().metadata().size();
+        size_t nClusters = clusters.view().metadata().size()-1;
         SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
         if (verbose_) std::cout << "SiPixelClustersSoACollection done " << nClusters << std::endl;
 
@@ -277,7 +280,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
 
         /* Candidates*/
-        size_t nCandidates = candidates.view().metadata().size();
+        size_t nCandidates = candidates.view().metadata().size()-1;
         CandidatesSoACollection tkCandidates(nCandidates, queue);
         auto CandidatesdeviceView = tkCandidates.view();
         if (verbose_) std::cout << "CandidatesSoACollection done " << nCandidates << std::endl;
@@ -285,7 +288,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
 
         /* Geometry*/
-        size_t ngeoClusters = clustergeometry.view().metadata().size();
+        size_t ngeoClusters = clustergeometry.view().metadata().size()-1;
         ClusterGeometrysSoACollection tkgeoclusters(ngeoClusters, queue);
         auto deviceView = tkgeoclusters.view();
         if (verbose_) std::cout << "ClusterGeometrysSoACollection done " << ngeoClusters << std::endl;
@@ -305,20 +308,21 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         // The output SoA are initialized with the input ones (in case no cluster will be split)
 
         alpaka::memcpy(queue, tkHit.buffer(), recHits.buffer());
-//        alpaka::wait(queue);  // Ensure copy is finished before checking
+        //alpaka::wait(queue);  // Ensure copy is finished before checking
 
+        
         alpaka::memcpy(queue, tkDigi.buffer(), digis.buffer());
-//        alpaka::wait(queue);  // Ensure copy is finished before checking
+        //alpaka::wait(queue);  // Ensure copy is finished before checking
 
         //alpaka::memcpy(queue, tkClusters.buffer(), clusters.buffer());
         //alpaka::memcpy(queue, tkVertices.buffer(), zVertices.buffer());
         //alpaka::wait(queue);  // Ensure copy is finished before checking
 
         alpaka::memcpy(queue, tkCandidates.buffer(), candidates.buffer());
-//        alpaka::wait(queue);  // Ensure copy is finished before checking
+        //alpaka::wait(queue);  // Ensure copy is finished before checking
 
         alpaka::memcpy(queue, tkgeoclusters.buffer(), clustergeometry.buffer());
-//        alpaka::wait(queue);  // Ensure copy is finished before checking
+        //alpaka::wait(queue);  // Ensure copy is finished before checking
 
         if (verbose_) std::cout << "Most memcpy done" << std::endl;
 /*
@@ -382,14 +386,14 @@ void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     edm::ParameterSetDescription desc;
     desc.add<uint32_t>("nHits", 100)->setComment("Number of hits for the test");
     desc.add<int32_t>("offset", 0)->setComment("Offset for hits");
-    desc.add<double>("ptMin", 200.0)->setComment("Minimum pt");
+    desc.add<double>("ptMin", 100.0)->setComment("Minimum pt");
     desc.add<double>("deltaR", 0.05)->setComment("Delta R");
     desc.add<double>("chargeFracMin", 2.0)->setComment("Minimum charge fraction");
-    desc.add<double>("tanLorentzAngle", 0.02)->setComment("Lorentz angle");
-    desc.add<double>("tanLorentzAngleBarrelLayer1", 0.015)->setComment("Lorentz angle for Barrel Layer 1");
-    desc.add<double>("expSizeXAtLorentzAngleIncidence", 0.1)->setComment("Expected size X at Lorentz angle incidence");
-    desc.add<double>("expSizeXDeltaPerTanAlpha", 0.02)->setComment("Expected size X delta per tan(alpha)");
-    desc.add<double>("expSizeYAtNormalIncidence", 0.1)->setComment("Expected size Y at normal incidence");
+    desc.add<double>("tanLorentzAngle", 0.0)->setComment("Lorentz angle");
+    desc.add<double>("tanLorentzAngleBarrelLayer1", 0.0)->setComment("Lorentz angle for Barrel Layer 1");
+    desc.add<double>("expSizeXAtLorentzAngleIncidence", 1.5)->setComment("Expected size X at Lorentz angle incidence");
+    desc.add<double>("expSizeXDeltaPerTanAlpha", 0.0)->setComment("Expected size X delta per tan(alpha)");
+    desc.add<double>("expSizeYAtNormalIncidence", 1.3)->setComment("Expected size Y at normal incidence");
     desc.add<double>("centralMIPCharge", 26000.0)->setComment("Central MIP charge");
     desc.add<double>("chargePerUnit", 2000.0)->setComment("Charge per unit");
     desc.add<double>("forceXError", 100.0)->setComment("Force X error");

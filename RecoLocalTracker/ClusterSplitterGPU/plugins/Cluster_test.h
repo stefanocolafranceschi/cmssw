@@ -18,9 +18,9 @@
 
 #include <alpaka/alpaka.hpp>
 
-constexpr int maxSubClusters = 20;    //max number of resulting clusters after the split (per cluster)
-constexpr int maxPixels = 1500;        //virtual number of pixel "created" during the split
-constexpr int pixelsPerCluster = 200;  //max number of pixel per cluster (in the original data)
+constexpr int maxSubClusters = 100;    //max number of resulting clusters after the split (per cluster)
+constexpr int maxPixels = 2200;        //virtual number of pixel "created" during the split
+constexpr int pixelsPerCluster = 800;  //max number of pixel per cluster (in the original data)
 
 using namespace reco;
 
@@ -49,7 +49,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
                   double forceXError_,
                   double forceYError_,
                   float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,
-                  bool verbose_, bool debugMode, int targetDetId, uint16_t targetClusterOf,
+                  bool verbose_, bool debugMode, int targetDetId, uint16_t targetClusterOffset,
+                 // int runningEvent,
                   Queue& queue);
 
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting

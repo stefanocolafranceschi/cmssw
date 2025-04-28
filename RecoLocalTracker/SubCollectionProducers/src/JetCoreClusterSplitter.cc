@@ -44,13 +44,13 @@ private:
                float expectedADC,
                int sizeY,
                int sizeX,
-               float jetZOverRho);
+               float jetZOverRho, int myevent);
     std::vector<SiPixelCluster> fittingSplit(const SiPixelCluster& aCluster,
                                              float expectedADC,
                                              int sizeY,
                                              int sizeX,
                                              float jetZOverRho,
-                                             unsigned int nSplitted);
+                                             unsigned int nSplitted, int myevent);
     std::pair<float, float> closestClusters(const std::vector<float>& distanceMap);
     std::multimap<float, int> secondDistDiffScore(const std::vector<std::vector<float>>& distanceMap);
     std::multimap<float, int> secondDistScore(const std::vector<std::vector<float>>& distanceMap);
@@ -92,7 +92,7 @@ void JetCoreClusterSplitter::fillDescriptions(edm::ConfigurationDescriptions& de
     desc.add<int>("targetDetId");
     desc.add<int>("targetClusterOffset");
     desc.add<int>("targetEvent");
-    desc.add<double>("ptMin", 200.0);
+    desc.add<double>("ptMin", 100.0);
     desc.add<double>("deltaRmax", 0.05);
     desc.add<double>("chargeFractionMin", 2.0);
     desc.add<edm::InputTag>("pixelClusters", edm::InputTag("siPixelCluster"));
@@ -173,14 +173,44 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
     }
 */
 
-
     if (debugMode && iEvent.id().event() != static_cast<edm::EventNumber_t>(targetEvent)) {
         return;
     }
 
+int myevent = iEvent.id().event();
+
+/*
+if (myevent == 442) {
+    std::cout << "\n\n***************** DUMPING original clusters for event 442 *****************\n";
+    uint32_t clusterCounter = 0;
+    for (auto detIt = inputPixelClusters->begin(); detIt != inputPixelClusters->end(); ++detIt) {
+        unsigned int rawId = detIt->id();  // <- fix: detIt->id()
+        for (auto cluster = detIt->begin(); cluster != detIt->end(); ++cluster, ++clusterCounter) { // <- fix: detIt->begin()
+            const SiPixelCluster& aCluster = *cluster;
+            std::vector<SiPixelCluster::Pixel> originalPixels = aCluster.pixels();
+
+            printf("[DEBUG] Cluster %u: rawId=%u pixelCount=%lu charge=%d\n",
+                   clusterCounter,
+                   rawId,
+                   originalPixels.size(),
+                   aCluster.charge());
+
+            for (unsigned int j = 0; j < originalPixels.size(); ++j) {
+                printf("  pixel %u: adc=%d x=%d y=%d\n",
+                       j,
+                       originalPixels[j].adc,
+                       originalPixels[j].x,
+                       originalPixels[j].y);
+            }
+        }
+    }
+}
+*/
 
     edmNew::DetSetVector<SiPixelCluster>::const_iterator detIt = inputPixelClusters->begin();
+
     for (; detIt != inputPixelClusters->end(); detIt++) {
+            //if (detIt->id()!=304185360) return;
 
         if (debugMode) {    
             if (detIt->id() != static_cast<unsigned int>(targetDetId)) continue;
@@ -189,42 +219,47 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
         edmNew::DetSetVector<SiPixelCluster>::FastFiller filler(*output, detIt->id());
         const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
         const GeomDet* det = geometry->idToDet(detset.id());
+
+//if (detset.id() != 304152592) continue;
+
         float pitchX, pitchY;
         std::tie(pitchX, pitchY) = static_cast<const PixelTopology&>(det->topology()).pitch();
         float thickness = det->surface().bounds().thickness();
         float tanLorentzAngle = tanLorentzAngle_;
         if (DetId(detset.id()).subdetId() == 1 /* px barrel */ && topology->pxbLayer(detset.id()) == 1) {
             tanLorentzAngle = tanLorentzAngleBarrelLayer1_;
-        }
+        } 
         int counter=0;
+
+
         for (auto cluster = detset.begin(); cluster != detset.end(); cluster++,counter++) {
 
             if (debugMode) {
                 if (counter != targetClusterOffset) continue;
             }
             
-            const SiPixelCluster& aCluster = *cluster;
-            
+
+            const SiPixelCluster& aCluster = *cluster;            
             std::vector<SiPixelCluster::Pixel> originalpixels = aCluster.pixels();
-            if (verbose) std::cout << "Working on Detector " <<  detset.id() << " clusterOffset " << counter << " with these pixels: " <<  originalpixels.size() << std::endl;
 
-
-            for (unsigned int j = 0; j < originalpixels.size(); j++) {
-                if (verbose) std::cout << " pixel adc " << originalpixels[j].adc << " x=" << originalpixels[j].x
-                << " y=" << originalpixels[j].y << std::endl;
-            }
-            
             
             bool hasBeenSplit = false;
             bool shouldBeSplit = false;
             GlobalPoint cPos =
             det->surface().toGlobal(pp->localParametersV(aCluster, (*geometry->idToDetUnit(detIt->id())))[0].first);
             GlobalPoint ppv(pv.position().x(), pv.position().y(), pv.position().z());
+            if (verbose) printf("Cluster: %u", counter);
+            if (verbose) printf("cpos:");
+            if (verbose) printf(" x = %.3f y = %.3f z = %.3f\n", cPos.x(), cPos.y(), cPos.z());
+
+
+            if (verbose) printf("ppv:");
+            if (verbose) printf(" x = %.3f y = %.3f z = %.3f\n", pv.position().x(), pv.position().y(), pv.position().z());
+
             GlobalVector clusterDir = cPos - ppv;
             
             if (verbose) printf("Cluster direction (cPos - vertex):");
             if (verbose) printf(" dx = %.3f dy = %.3f dz = %.3f\n", clusterDir.x(), clusterDir.y(), clusterDir.z());
-
 
             // Compute and print the pseudorapidity and phi of the cluster (global)
             float clusterEta = cPos.eta();
@@ -233,33 +268,64 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
             // Compute and print the pseudorapidity and phi of the primary vertex
             float vertexEta = ppv.eta();
             float vertexPhi = ppv.phi();
-            
+
+            //std::cout << "core size" << cores->size() << std::endl;
             for (unsigned int ji = 0; ji < cores->size(); ji++) {
+                //std::cout << "(*cores)[ji].pt()" << (*cores)[ji].pt() << std::endl;
                 if ((*cores)[ji].pt() > ptMin_) {
                     const reco::Candidate& jet = (*cores)[ji];
                     GlobalVector jetDir(jet.px(), jet.py(), jet.pz());
-                    
-                    // Print the jet information
-                    if (verbose) printf("Jet Information:\n");
-                    if (verbose) printf("  jetPx = %.3f, jetPy = %.3f, jetPz = %.3f\n", jet.px(), jet.py(), jet.pz());
-                    if (verbose) printf("  jetPt = %.3f, jetEta = %.3f, jetPhi = %.3f\n\n", jet.pt(), jet.eta(), jet.phi());
-                    
-                    
+
                     if (Geom::deltaR(jetDir, clusterDir) < deltaR_) {
-                        if (verbose) printf("This clusterOffset: %u has deltaR < deltaR_ and it might be split\n", counter);
+
+
+                        // Print the jet information
+                        //printf("Jet Information:\n");
+                        //printf("  jetPx = %.3f, jetPy = %.3f, jetPz = %.3f\n", jet.px(), jet.py(), jet.pz());
+                        //printf("  jetPt = %.3f, jetEta = %.3f, jetPhi = %.3f\n\n", jet.pt(), jet.eta(), jet.phi());
+
+                        //printf("  clusterEta = %f, clusterPhi = %f\n", clusterEta, clusterPhi);
+                        //printf("  deltaR = %.3f\n", Geom::deltaR(jetDir, clusterDir));
+                        
+
+                        //printf("detset.id()=%u This clusterOffset: %u has deltaR < deltaR_ and it might be split\n", detset.id(), counter);
                         
                         // check if the cluster has to be splitted
                         
                         LocalVector jetDirLocal = det->surface().toLocal(jetDir);
+
+//                    if (verbose) printf("Jet Local:\n");
+//                    printf("  jetDirLocal.x() = %.3f, jetDirLocal.y() = %.3f, jetDirLocal.z() = %.3f\n", jetDirLocal.x(), jetDirLocal.y(), jetDirLocal.z());
                         
                         float jetTanAlpha = jetDirLocal.x() / jetDirLocal.z();
                         float jetTanBeta = jetDirLocal.y() / jetDirLocal.z();
                         float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
                         
+  //               printf("jetTanAlpha=%f jetTanBeta=%f jetZOverRho=%f\n",
+  //                      jetTanAlpha, jetTanBeta, jetZOverRho) ;
+
                         float expSizeX = expSizeXAtLorentzAngleIncidence_ +
                         std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngle));
+
                         float expSizeY = std::sqrt((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
                                                    thickness * thickness / (pitchY * pitchY) * jetTanBeta * jetTanBeta);
+/*
+printf("expSizeX ingredients:\n");
+printf("  expSizeXAtLorentzAngleIncidence_ = %.6f\n", expSizeXAtLorentzAngleIncidence_);
+printf("  expSizeXDeltaPerTanAlpha_        = %.6f\n", expSizeXDeltaPerTanAlpha_);
+printf("  jetTanAlpha                      = %.6f\n", jetTanAlpha);
+printf("  tanLorentzAngle                  = %.6f\n", tanLorentzAngle);
+printf("  |jetTanAlpha - tanLorentzAngle| = %.6f\n", std::abs(jetTanAlpha - tanLorentzAngle));
+printf("  => expSizeX                      = %.6f\n\n", expSizeX);
+
+printf("expSizeY ingredients:\n");
+printf("  expSizeYAtNormalIncidence_       = %.6f\n", expSizeYAtNormalIncidence_);
+printf("  thickness                        = %.6f\n", thickness);
+printf("  pitchY                           = %.6f\n", pitchY);
+printf("  jetTanBeta                       = %.6f\n", jetTanBeta);
+printf("  => expSizeY                      = %.6f\n", expSizeY);
+*/
+
                         if (expSizeX < 1.f)
                             expSizeX = 1.f;
                         if (expSizeY < 1.f)
@@ -267,14 +333,15 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
                         float expCharge = std::sqrt(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
                         
                         
+
                         if (aCluster.charge() > expCharge * chargeFracMin_ &&
                             (aCluster.sizeX() > expSizeX + 1 || aCluster.sizeY() > expSizeY + 1)) {
                             shouldBeSplit = true;
                                                         
-                            if (verbose) printf("Trying to split: charge=%d expSizeX=%f expSizeY=%f\n",
-                                       aCluster.charge(), expSizeX, expSizeY);
+                            printf("Trying to split (on this rawId=%u): charge=%d expSizeX=%f expSizeY=%f\n",
+                                       detset.id(), aCluster.charge(), expSizeX, expSizeY);
                             
-                            if (split(aCluster, filler, expCharge, expSizeY, expSizeX, jetZOverRho)) {
+                            if (split(aCluster, filler, expCharge, expSizeY, expSizeX, jetZOverRho, myevent)) {
                                 hasBeenSplit = true;
                             }
                         }
@@ -310,12 +377,12 @@ bool JetCoreClusterSplitter::split(const SiPixelCluster& aCluster,
                                    float expectedADC,
                                    int sizeY,
                                    int sizeX,
-                                   float jetZOverRho) {
+                                   float jetZOverRho, int myevent) {
     // This function should test several configuration of splitting, and then
     // return the one with best chi2
     
     std::vector<SiPixelCluster> sp = fittingSplit(
-                                                  aCluster, expectedADC, sizeY, sizeX, jetZOverRho, std::floor(aCluster.charge() / expectedADC + 0.5f));
+                                                  aCluster, expectedADC, sizeY, sizeX, jetZOverRho, std::floor(aCluster.charge() / expectedADC + 0.5f),myevent);
     
     // for the config with best chi2
     for (unsigned int i = 0; i < sp.size(); i++) {
@@ -377,7 +444,7 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
                                                                  int sizeY,
                                                                  int sizeX,
                                                                  float jetZOverRho,
-                                                                 unsigned int nSplitted) {
+                                                                 unsigned int nSplitted, int myevent) {
     std::vector<SiPixelCluster> output;
     
     unsigned int meanExp = nSplitted;
@@ -402,7 +469,7 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
         if (sub < 1) sub = 1;        
         int perDiv = originalpixels[j].adc / sub;
         
-        if (verbose) std::cout << "Splitting " << j << " in [ " << pixels.size() << " , " << pixels.size() + sub
+        std::cout << "Splitting " << j << " in [ " << pixels.size() << " , " << pixels.size() + sub
                                 << " ], expected numb of clusters: " << meanExp << " original pixel (x,y) " << originalpixels[j].x
                                 << " " << originalpixels[j].y << " sub " << sub << std::endl;
                                 
@@ -599,13 +666,14 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
     //pixelMap(meanExp,std::vector<std::vector<SiPixelCluster::PixelPos *>
     //>(512,std::vector<SiPixelCluster::Pixel *>(512,0)));
     
-    
+    int lll=0;
     if (verbose) printf("\nFinal writing\n");
     for (int cl = 0; cl < (int)meanExp; cl++) {
 
 
         for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
-            std::cout << "OSplit cl=" << cl
+            lll++;
+            std::cout << "Cumulative= "<< lll << " Event= " << myevent << " OSplit cl=" << cl
                       << " pixel_X[" << j << "]=" << pixelsForCl[cl][j].x
                       << " pixel_Y[" << j << "]=" << pixelsForCl[cl][j].y
                       << " ADC=" << pixelsForCl[cl][j].adc
