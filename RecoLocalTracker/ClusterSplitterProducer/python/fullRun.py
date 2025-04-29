@@ -49,8 +49,8 @@ process.candidateDataSoA = cms.EDProducer("HelperSplitter",
 # trial producer (which uses the output from HelperSplitter)
 process.trial = cms.EDProducer(
     "trial",
-    nHits=cms.uint32(100),
-    offset=cms.int32(10),
+    #nHits=cms.uint32(100),
+    #offset=cms.int32(10),
     ptMin=cms.double(100),
     deltaR=cms.double(0.05),
     chargeFracMin=cms.double(2.0),
@@ -69,7 +69,7 @@ process.trial = cms.EDProducer(
     siPixelDigis=cms.InputTag("candidateDataSoA"),              
     #siPixelDigis=cms.InputTag("siPixelClustersPreSplittingAlpaka"),              
     #siPixelDigis =cms.InputTag("siPixelClustersPreSplittingAlpaka", "", "RECO"), #assuming in the file
-    trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka"),
+    ##trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka"),
     #trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka", "", "RECO"),
     candidateInput=cms.InputTag("candidateDataSoA"),
     #zVertex=cms.InputTag("pixelVerticesAlpaka"),
@@ -132,7 +132,7 @@ process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring('file:largestep3.root')
     #fileNames = cms.untracked.vstring('file:/gpu_data/store/relval/CMSSW_15_0_0/RelValTTbar_14TeV/GEN-SIM-DIGI-RAW/PU_142X_mcRun3_2025_realistic_v7_STD_2025_PU-v3/2580000/1c2caeef-e246-4b6d-bebc-4fb6df4f9bbd.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(999))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(10))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

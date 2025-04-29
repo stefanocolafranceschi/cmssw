@@ -18,17 +18,18 @@
 
 #include <alpaka/alpaka.hpp>
 
-constexpr int maxSubClusters = 100;    //max number of resulting clusters after the split (per cluster)
-constexpr int maxPixels = 5800;        //virtual number of pixel "created" during the split
-constexpr int pixelsPerCluster = 800;  //max number of pixel per cluster (in the original data)
+constexpr int maxSubClusters = 100;    //100max number of resulting clusters after the split (per cluster)
+constexpr int maxPixels = 5800;        //5800virtual number of pixel "created" during the split
+constexpr int pixelsPerCluster = 800;  //800max number of pixel per cluster (in the original data)
+
+constexpr bool verbose = false;
 
 using namespace reco;
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
 
   template <typename TrackerTraits>
-  void runKernels(TrackingRecHitSoAView<TrackerTraits>& hits,
-                  SiPixelDigisSoAView& digis,
+  void runKernels(SiPixelDigisSoAView& digis,
                   SiPixelClustersSoAView& clusters,
                   CandidatesSoAView& candidates,
                   ClusterGeometrysSoAView& geoclusters,

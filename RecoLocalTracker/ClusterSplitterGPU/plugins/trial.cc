@@ -33,10 +33,10 @@
 #include "DataFormats/Candidate/interface/Candidate.h"
 #include "DataFormats/Candidate/interface/VertexCompositePtrCandidate.h"
 
-#include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsDevice.h"
-#include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsHost.h"
-#include "DataFormats/TrackingRecHitSoA/interface/alpaka/TrackingRecHitsSoACollection.h"
-#include "DataFormats/TrackingRecHitSoA/interface/SiPixelHitStatus.h"
+//#include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsDevice.h"
+//#include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsHost.h"
+//#include "DataFormats/TrackingRecHitSoA/interface/alpaka/TrackingRecHitsSoACollection.h"
+//#include "DataFormats/TrackingRecHitSoA/interface/SiPixelHitStatus.h"
 
 #include "DataFormats/SiPixelDigiSoA/interface/SiPixelDigisDevice.h"
 #include "DataFormats/SiPixelDigiSoA/interface/SiPixelDigisHost.h"
@@ -97,8 +97,8 @@ private:
 
   void produce(edm::StreamID sid, device::Event& event, device::EventSetup const& setup) const override;
 
-  uint32_t nHits_;
-  int32_t offset_;
+  //uint32_t nHits_;
+  //int32_t offset_;
   const double ptMin_;
   TFile* rootFile_;
 
@@ -119,7 +119,7 @@ private:
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> digisToken_;
   //const edm::EDGetTokenT<SiPixelClustersHost> digisToken_;
   //const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelClustersSoACollection> clusterToken_;
-  const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
+  ////const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::TrackingRecHitsSoACollection<pixelTopology::Phase1>> recHitsToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::CandidatesSoACollection> candidateToken_;
   //const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ZVertexSoACollection> zVertexToken_;
   const device::EDGetToken<ALPAKA_ACCELERATOR_NAMESPACE::ClusterGeometrysSoACollection> geometryToken_;
@@ -135,8 +135,8 @@ private:
 
 trial::trial(edm::ParameterSet const& iConfig)
     : EDProducer(iConfig),
-      nHits_(iConfig.getParameter<uint32_t>("nHits")),
-      offset_(iConfig.getParameter<int32_t>("offset")),
+      //nHits_(iConfig.getParameter<uint32_t>("nHits")),
+      //offset_(iConfig.getParameter<int32_t>("offset")),
       ptMin_(iConfig.getParameter<double>("ptMin")),
       rootFile_(nullptr),
       deltaR_(iConfig.getParameter<double>("deltaR")),
@@ -153,7 +153,7 @@ trial::trial(edm::ParameterSet const& iConfig)
       fractionalWidth_(iConfig.getParameter<double>("fractionalWidth")),
       clusterToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelClusters"))),
       digisToken_(consumes(iConfig.getParameter<edm::InputTag>("siPixelDigis"))),
-      recHitsToken_(consumes(iConfig.getParameter<edm::InputTag>("trackingRecHits"))),
+      ////recHitsToken_(consumes(iConfig.getParameter<edm::InputTag>("trackingRecHits"))),
       candidateToken_(consumes(iConfig.getParameter<edm::InputTag>("candidateInput"))),
       //zVertexToken_(consumes(iConfig.getParameter<edm::InputTag>("zVertex"))),
       geometryToken_(consumes(iConfig.getParameter<edm::InputTag>("geometryInput"))),
@@ -207,7 +207,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
     auto const& clusters = deviceEvent.get(clusterToken_);
     auto const& digis = deviceEvent.get(digisToken_);
 
-    auto const& recHits = deviceEvent.get(recHitsToken_);
+    ////auto const& recHits = deviceEvent.get(recHitsToken_);
     //auto const& zVertices = deviceEvent.get(zVertexToken_);
     auto const& candidates = deviceEvent.get(candidateToken_);
     auto const& clustergeometry = deviceEvent.get(geometryToken_);
@@ -240,20 +240,16 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         auto moduleStartD =
             cms::alpakatools::make_device_buffer<uint32_t[]>(queue, pixelTopology::Phase1::numberOfModules + 1);
         alpaka::memcpy(queue, moduleStartD, moduleStartH);
-        alpaka::wait(queue);            // Ensure the data copy is complete
+        //alpaka::wait(queue);            // Ensure the data copy is complete
 
         if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
 
         // ------------- CREATE DEVICE BUFFERS -------------------------------
 
-        /* RecHits
-           the TrackingRecHitsSoACollection is an alias for: TrackingRecHitDevice (gpu) 
-                                                            TrackingRecHitHost (cpu)  */
-        size_t nHits = recHits.nHits();
-        TrackingRecHitsSoACollection<pixelTopology::Phase1> tkHit(queue, nHits, eventOffset, moduleStartD.data());
-        if (verbose_) std::cout << "TrackingRecHitsSoACollection done " << nHits << std::endl;
+        ////size_t nHits = recHits.nHits();
+        ////TrackingRecHitsSoACollection<pixelTopology::Phase1> tkHit(queue, nHits, eventOffset, moduleStartD.data());
+        ////if (verbose_) std::cout << "TrackingRecHitsSoACollection done " << nHits << std::endl;
         //- - - - - - - - - - - - - - - - - - -
-
 
         /* Digis 
         the SiPixelDigisSoACollection is an alias for: SiPixelDigisDevice (gpu) or 
@@ -263,7 +259,6 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
         size_t nDigis = digis.view().metadata().size()-1;
         SiPixelDigisSoACollection tkDigi(nDigis, queue);
-        //tkDigi.setNModules(pixelTopology::Phase1::numberOfModules);         // Set additional metadata
         if (verbose_) std::cout << "SiPixelDigisSoACollection done " << nDigis << std::endl;
 
         //- - - - - - - - - - - - - - - - - - -
@@ -307,7 +302,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         // ------------- COPY FROM HOST TO DEVICE BUFFERS -------------------------------
         // The output SoA are initialized with the input ones (in case no cluster will be split)
 
-        alpaka::memcpy(queue, tkHit.buffer(), recHits.buffer());
+        ////alpaka::memcpy(queue, tkHit.buffer(), recHits.buffer());
         //alpaka::wait(queue);  // Ensure copy is finished before checking
 
         
@@ -350,7 +345,8 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         // Execute the kernel
         if (verbose_) std::cout << "About to start the kernel" << std::endl;
         Splitting::runKernels<pixelTopology::Phase1>(
-            tkHit.view(), tkDigi.view(), tkClusters.view(), tkCandidates.view(), 
+            ////tkHit.view(), 
+            tkDigi.view(), tkClusters.view(), tkCandidates.view(), 
             tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_, 
             expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_, 
             centralMIPCharge_, chargePerUnit_, fractionalWidth_, 
@@ -384,8 +380,8 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
 void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     edm::ParameterSetDescription desc;
-    desc.add<uint32_t>("nHits", 100)->setComment("Number of hits for the test");
-    desc.add<int32_t>("offset", 0)->setComment("Offset for hits");
+    ////desc.add<uint32_t>("nHits", 100)->setComment("Number of hits for the test");
+    ////desc.add<int32_t>("offset", 0)->setComment("Offset for hits");
     desc.add<double>("ptMin", 100.0)->setComment("Minimum pt");
     desc.add<double>("deltaR", 0.05)->setComment("Delta R");
     desc.add<double>("chargeFracMin", 2.0)->setComment("Minimum charge fraction");
@@ -403,7 +399,7 @@ void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     desc.add<edm::InputTag>("geometryInput", edm::InputTag(""))->setComment("Input tag for geometry data");
     desc.add<edm::InputTag>("siPixelClusters", edm::InputTag(""))->setComment("Input tag for siPixelClusters data");
     desc.add<edm::InputTag>("siPixelDigis", edm::InputTag(""))->setComment("Input tag for siPixelDigis data");
-    desc.add<edm::InputTag>("trackingRecHits", edm::InputTag(""))->setComment("Input tag for trackingRecHits data");
+    ////desc.add<edm::InputTag>("trackingRecHits", edm::InputTag(""))->setComment("Input tag for trackingRecHits data");
     //desc.add<edm::InputTag>("zVertex", edm::InputTag(""))->setComment("Input tag for zVertex data");
     desc.add<bool>("verbose", false)->setComment("Verbose output");
     desc.add<bool>("debugMode", true);
