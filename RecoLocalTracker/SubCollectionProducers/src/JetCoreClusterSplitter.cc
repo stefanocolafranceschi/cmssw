@@ -163,6 +163,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
     const PixelClusterParameterEstimator* pp = &iSetup.getData(tCPE_);
     auto output = std::make_unique<edmNew::DetSetVector<SiPixelCluster>>();
     
+
     //DetId targetDetId;
     //int targetClusterIndex;
 /*
@@ -178,6 +179,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
     }
 
 int myevent = iEvent.id().event();
+if (myevent != 25) return;
 
 /*
 if (myevent == 442) {
@@ -278,6 +280,14 @@ if (myevent == 442) {
 
                     if (Geom::deltaR(jetDir, clusterDir) < deltaR_) {
 
+
+            printf("Cluster: %u", counter);
+            printf("cpos:");
+            printf(" x = %.3f y = %.3f z = %.3f\n", cPos.x(), cPos.y(), cPos.z());
+
+
+            printf("ppv:");
+            printf(" x = %.3f y = %.3f z = %.3f\n", pv.position().x(), pv.position().y(), pv.position().z());
 
                         // Print the jet information
                         //printf("Jet Information:\n");
@@ -469,9 +479,9 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
         if (sub < 1) sub = 1;        
         int perDiv = originalpixels[j].adc / sub;
         
-        std::cout << "Splitting " << j << " in [ " << pixels.size() << " , " << pixels.size() + sub
-                                << " ], expected numb of clusters: " << meanExp << " original pixel (x,y) " << originalpixels[j].x
-                                << " " << originalpixels[j].y << " sub " << sub << std::endl;
+        //std::cout << "Splitting " << j << " in [ " << pixels.size() << " , " << pixels.size() + sub
+        //                        << " ], expected numb of clusters: " << meanExp << " original pixel (x,y) " << originalpixels[j].x
+        //                        << " " << originalpixels[j].y << " sub " << sub << std::endl;
                                 
         for (int k = 0; k < sub; k++) {
             if (k == sub - 1) perDiv = originalpixels[j].adc - perDiv * k;

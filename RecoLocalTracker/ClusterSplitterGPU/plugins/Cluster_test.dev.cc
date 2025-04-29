@@ -565,7 +565,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 perDiv = digiView.adc(jj) - perDiv * k;
                             }
 
-                            if (pixelsSize >= maxPixels - 1) return;
+                            if (pixelsSize >= maxPixels - 1) {
+                                printf("WARNING, pixelsize is %u while maxPixels= %u", pixelsSize, maxPixels);
+                                return;
+                            }
 
                             pixels[pixelsSize]      = j; 
                             pixel_X[pixelsSize]     = digiView.xx(jj);
