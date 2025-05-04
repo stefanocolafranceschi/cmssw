@@ -321,6 +321,9 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
   std::vector<float> oldclx(meanExp);
   std::vector<float> oldcly(meanExp);
   std::vector<SiPixelCluster::Pixel> originalpixels = aCluster.pixels();
+
+int StartWith = originalpixels.size();
+
   std::vector<std::pair<int, SiPixelCluster::Pixel>> pixels;
   for (unsigned int j = 0; j < originalpixels.size(); j++) {
     int sub = originalpixels[j].adc / chargePerUnit_ * expectedADC / centralMIPCharge_;
@@ -499,18 +502,17 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
   //	std::vector<std::vector<std::vector<SiPixelCluster::PixelPos *> > >
   //pixelMap(meanExp,std::vector<std::vector<SiPixelCluster::PixelPos *>
   //>(512,std::vector<SiPixelCluster::Pixel *>(512,0)));
-
-  for (int cl = 0; cl < (int)meanExp; cl++) {
-/*
-        for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
-            
-            std::cout << " OSplit cl=" << cl
-                      << " pixel_X[" << j << "]=" << pixelsForCl[cl][j].x
-                      << " pixel_Y[" << j << "]=" << pixelsForCl[cl][j].y
-                      << " ADC=" << pixelsForCl[cl][j].adc
-                      << std::endl;
-        }
-*/
+int kkk=0;
+//  for (int cl = 0; cl < (int)meanExp; cl++) {
+//        for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
+  //          kkk++;
+    //        std::cout << " OSplit cl=" << cl
+      //                << " pixel_X[" << j << "]=" << pixelsForCl[cl][j].x
+        //              << " pixel_Y[" << j << "]=" << pixelsForCl[cl][j].y
+          //            << " ADC=" << pixelsForCl[cl][j].adc
+            //          << std::endl;
+        //}
+if (kkk>StartWith) std::cout << " OOOOPS " << std::endl;
 
     if (verbose)
       std::cout << "Pixels of cl " << cl << " ";

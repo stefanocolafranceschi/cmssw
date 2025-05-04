@@ -138,10 +138,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             // Ensure only valid threads process clusters
             if (globalThreadId < numClusters) {
 
-                ////if ( globalThreadId == 0 ) {
-                ////    *clusterCounterDevice = 0;
-                ////    *pixelCounterDevice = 0;
-                ////}
+                if ( globalThreadId == 0 ) {
+                    *clusterCounterDevice = 0;
+                    *pixelCounterDevice = 0;
+                }
 
                 uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
                 //clusterIdx=387;   //sample test
@@ -214,6 +214,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 ///if (verbose_) printf(" dx = %.3f dy = %.3f dz = %.3f\n", relX, relY, relZ);
 
                 bool doSplit = false;
+                bool alreadySplit = false;
 
                 for (uint32_t candIdx = 0; candIdx < numCandidates; ++candIdx) {
                     //printf("Processing Cluster: %u, Candidate: %u/%u Block index: %u, Threads per block: %u, Total threads: %u\n",
@@ -257,7 +258,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
 
                     doSplit = deltaR < deltaR_;
-
+//doSplit= false;
                     // Check deltaR condition and split clusters if applicable
                     if (doSplit) {
                         ///if (verbose_) printf("This clusterOffset: %u has deltaR < deltaR_ and it might be split\n",clusterOffset);
@@ -297,9 +298,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                      pixelCounter, 
                                      begin, 
                                      end);
+                        alreadySplit = true;                        
                     }
                 }
-                if (!doSplit) {                       
+                if (!doSplit && !alreadySplit) {                       
                     storeOutputDigis(acc, digiView, outputDigis, begin, end, clusterCounterDevice, pixelCounterDevice);
                 }
             
@@ -350,33 +352,44 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             uint32_t pixelCount = end - begin;
 
-            if (pixelCount == 0) {
-                return;  // Nothing to store
-            }
+            //if (pixelCount == 0) {
+            //    printf("[storeOutputDigis] WARNING: pixelCount is zero! begin=%u end=%u\n", begin, end);
+            //    return;
+            //}
 
-            // Reserve a new cluster index for this unsplit cluster
-            uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
+            uint32_t MaxPixels = outputDigis.metadata().size();
+            uint32_t currentPixelCount = alpaka::atomicAdd(acc, pixelCounterDevice, 0u);  // peek current
 
-            // Reserve space in the output digi buffer
-            uint32_t pixelWriteOffset = alpaka::atomicAdd(acc, pixelCounterDevice, pixelCount);
-
-            // Bounds check
-            uint32_t maxPixels = outputDigis.metadata().size();
-            if (pixelWriteOffset + pixelCount > maxPixels) {
-                printf("[storeOutputDigis] ERROR: Out of bounds write! offset=%u count=%u max=%u\n",
-                        pixelWriteOffset, pixelCount, maxPixels);
+            if (currentPixelCount + pixelCount > MaxPixels) {
+                // Log and return safely
+                //printf("[storeOutputDigis] ERROR: Attempt to write out of bounds! "
+                //       "currentPixelCount=%u + pixelCount=%u > maxPixels=%u\n",
+                //       currentPixelCount, pixelCount, maxPixels);
                 return;
             }
 
-            // Copy pixels
-            for (uint32_t i = 0; i < pixelCount; ++i) {
-                uint32_t srcIdx = begin + i;
-                uint32_t dstIdx = pixelWriteOffset + i;
+            // Reserve a new cluster index (used for all pixels of this cluster)
+            uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
 
-                // Optional: uncomment if further protection needed
-                // if (srcIdx >= digiView.metadata().size() || dstIdx >= maxPixels) {
-                //     continue;
-                // }
+            // Reserve space for the pixels
+            uint32_t pixelWriteOffset = alpaka::atomicAdd(acc, pixelCounterDevice, pixelCount);
+
+            // Copy all pixels of this cluster
+            for (uint32_t i = 0; i < pixelCount; i++) {
+                uint32_t srcIdx = begin + i;
+                uint32_t dstIdx = currentPixelCount + i;
+
+                //if (srcIdx >= static_cast<uint32_t>(digiView.metadata().size())) {
+                //    printf("[storeOutputDigis] ERROR: srcIdx out of bounds! srcIdx=%u >= %d\n",
+                //           srcIdx, digiView.metadata().size());
+                //    continue;
+                //}
+
+                //if (dstIdx >= static_cast<uint32_t>(maxPixels)) {
+                //    printf("[storeOutputDigis] ERROR: dstIdx out of bounds! dstIdx=%u >= %d\n",
+                //           dstIdx, maxPixels);
+                //    continue;
+                //}
 
                 outputDigis.clus(dstIdx)      = clusterIndex;
                 outputDigis.xx(dstIdx)        = digiView.xx(srcIdx);
@@ -384,8 +397,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 outputDigis.adc(dstIdx)       = digiView.adc(srcIdx);
                 outputDigis.rawIdArr(dstIdx)  = digiView.rawIdArr(srcIdx);
                 outputDigis.moduleId(dstIdx)  = digiView.moduleId(srcIdx);
-            }
 
+                //printf("[storeOutputDigis] Wrote pixel %u dstIdx=%u: (x=%u y=%u adc=%u rawId=%u mod=%u)\n",
+                //       i, dstIdx,
+                //       digiView.xx(srcIdx), digiView.yy(srcIdx), digiView.adc(srcIdx),
+                //       digiView.rawIdArr(srcIdx), digiView.moduleId(srcIdx));
+            }
         }
 
 
@@ -756,55 +773,49 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             //}
                         }
                     }
-                    //printf("-----REMAINING: %u\n",remainingSteps);
+                    
+                    //storeOutputDigis
+                    uint32_t kkk=0;
+                    for (uint16_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
 
+                        // Reserve a new cluster index (only once per subcluster)
+                        uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
 
-
-                    // Storing
-                    for (uint16_t cl = 0; cl < meanExp; ++cl) {
-                        // Merge duplicate pixels (same x/y within same subcluster)
-                        for (uint16_t j = 0; j < pixelsSize; ++j) {
-                            if (j < maxPixels && pixel_ADC[j] != 0 && clusterForPixel[j] == cl) {
-                                for (uint16_t k = j + 1; k < pixelsSize; ++k) {
-                                    if (k < maxPixels &&
-                                        pixel_ADC[k] != 0 &&
-                                        clusterForPixel[k] == cl &&
-                                        pixel_X[k] == pixel_X[j] &&
-                                        pixel_Y[k] == pixel_Y[j]) {
-                                        pixel_ADC[j] += pixel_ADC[k];
-                                        pixel_ADC[k] = 0;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Count valid pixels after merging
+                        // Count pixels to be written for this subcluster
                         uint16_t validPixelCount = 0;
-                        for (uint16_t j = 0; j < pixelsSize; ++j) {
+                        for (uint16_t j = 0; j < static_cast<int>(pixelsSize); ++j) {
                             if (j < maxPixels && clusterForPixel[j] == cl && pixel_ADC[j] != 0) {
                                 ++validPixelCount;
                             }
                         }
 
-                        // Reserve cluster index and output pixel space
-                        uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
-                        uint32_t pixelWriteOffset = alpaka::atomicAdd(acc, pixelCounterDevice, static_cast<uint32_t>(validPixelCount));
 
-                        // safe check
-                        uint32_t maxPixels = outputDigis.metadata().size();
-                        if (pixelWriteOffset + validPixelCount > maxPixels) {
-                            printf("[SPLIT ERROR] Out-of-bounds write: pixelWriteOffset=%u + validPixelCount=%u > max=%u\n",
-                                   pixelWriteOffset, validPixelCount, maxPixels);
-                            return;
-                        }
+                        uint32_t pixelStartWritingAt = alpaka::atomicAdd(acc, pixelCounterDevice, 0u);
 
-                        // Write pixels to output
+                        // Write pixels for this subcluster
                         uint32_t pixelOffset = 0;
-                        for (uint16_t j = 0; j < pixelsSize; ++j) {
+                        for (uint16_t j = 0; j < static_cast<int>(pixelsSize); ++j) {
                             if (j < maxPixels && clusterForPixel[j] == cl && pixel_ADC[j] != 0) {
-                                uint32_t outIdx = pixelWriteOffset + pixelOffset;
+                                // Merge duplicate pixels (same x/y within same subcluster)
+                                for (uint16_t k = j + 1; k < pixelsSize; ++k) {
+                                    if (k < maxPixels &&
+                                        pixel_ADC[k] != 0 &&
+                                        pixel_X[k] == pixel_X[j] &&
+                                        pixel_Y[k] == pixel_Y[j] &&
+                                        clusterForPixel[k] == cl) {
+                                            pixel_ADC[j] += pixel_ADC[k];
+                                            pixel_ADC[k] = 0;
+                                    }
+                                }
 
-                                // (Optional) bounds check here if needed
+                                // Write to output using reserved space
+                                uint32_t outIdx = pixelStartWritingAt + pixelOffset;
+
+                                // DO NOT ALLOW MORE PIXELS THAN ORIGINAL
+                                if (kkk > (end-begin) ) {
+                                    //printf("Error, more clusters than original");
+                                    return;
+                                }
 
                                 outputDigis.clus(outIdx)      = clusterIndex;
                                 outputDigis.xx(outIdx)        = pixel_X[j];
@@ -812,13 +823,21 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 outputDigis.adc(outIdx)       = pixel_ADC[j];
                                 outputDigis.rawIdArr(outIdx)  = rawIdArr;
                                 outputDigis.moduleId(outIdx)  = moduleId;
+                                uint32_t KeepWriting = alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
 
-                                ++pixelOffset;
+                                //printf("NSplit ( ) cl=%d rawIdArr %d pixel_X[%d]=%d pixel_Y[%d]=%d ADC=%d \n",
+                                //           cl, rawIdArr, j, pixel_X[j], j, pixel_Y[j], pixel_ADC[j]);
+
+                                ///if (verbose_) {
+                                ///    printf("rawIdArr %d Split cl=%d pixel_X[%d]=%d pixel_Y[%d]=%d ADC=%d\n",
+                                ///           rawIdArr, cl, j, pixel_X[j], j, pixel_Y[j], pixel_ADC[j]);
+                                ///}
+                                pixelOffset++;
+                                kkk++;
+
                             }
                         }
                     }
-
-
                 }
             }
         }
