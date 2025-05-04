@@ -179,16 +179,16 @@ trial::~trial() {
 
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
 
-std::cout << "BBBBBBBBBBB" << std::endl;
-
+/*
     if ((debugMode) && (deviceEvent.id().event() != static_cast<edm::EventNumber_t>(targetEvent))) {
         std::cout << "Skipping this event" << std::endl;
         return;
     }
+*/
 
     //if (deviceEvent.id().event() !=123) return;
 
-    if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
+    //if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
 
     // Ensure we're selecting the first available GPU device
     auto const& deviceList = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
@@ -198,7 +198,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
     // Select the first GPU device
     auto const& device = deviceList[0];
-    if (verbose_) std::cout << "Using GPU device: " << alpaka::getName(device) << std::endl;
+    ///if (verbose_) std::cout << "Using GPU device: " << alpaka::getName(device) << std::endl;
 
     // ---------------------------------------------------------------
     // RETRIEVE THE SOA COLLECTIONS TO BE USED IN THE KERNEL DEVICE
@@ -223,14 +223,14 @@ std::cout << "BBBBBBBBBBB" << std::endl;
     float vertexPhi = ppv.phi();
 
 
-    if (verbose_) std::cout << "All Things retrievied..." << std::endl;
+    ///if (verbose_) std::cout << "All Things retrievied..." << std::endl;
 
     // Use event ID as the offset
     int32_t eventOffset = deviceEvent.id().event();
-    if (verbose_) std::cout << "Event offset: " << eventOffset << std::endl;
+    ///if (verbose_) std::cout << "Event offset: " << eventOffset << std::endl;
     for (const auto& device : devices_) {
         Queue queue(device);
-
+/*
         // Define moduleStart data
         auto moduleStartH =
             cms::alpakatools::make_host_buffer<uint32_t[]>(queue, pixelTopology::Phase1::numberOfModules + 1);
@@ -242,7 +242,8 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         alpaka::memcpy(queue, moduleStartD, moduleStartH);
         //alpaka::wait(queue);            // Ensure the data copy is complete
 
-        if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
+*/
+        ///if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
 
         // ------------- CREATE DEVICE BUFFERS -------------------------------
 
@@ -259,7 +260,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 
         size_t nDigis = digis.view().metadata().size()-1;
         SiPixelDigisSoACollection tkDigi(nDigis, queue);
-        if (verbose_) std::cout << "SiPixelDigisSoACollection done " << nDigis << std::endl;
+        ///if (verbose_) std::cout << "SiPixelDigisSoACollection done " << nDigis << std::endl;
 
         //- - - - - - - - - - - - - - - - - - -
 
@@ -268,17 +269,17 @@ std::cout << "BBBBBBBBBBB" << std::endl;
                                                              SiPixelClustersHost (cpu)  */
         size_t nClusters = clusters.view().metadata().size()-1;
         SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
-        if (verbose_) std::cout << "SiPixelClustersSoACollection done " << nClusters << std::endl;
+        ///if (verbose_) std::cout << "SiPixelClustersSoACollection done " << nClusters << std::endl;
 
         alpaka::memcpy(queue, tkClusters.buffer(), clusters.buffer());
-//        alpaka::wait(queue);  // Ensure copy is finished before checking
+        //alpaka::wait(queue);  // Ensure copy is finished before checking
 
 
         /* Candidates*/
         size_t nCandidates = candidates.view().metadata().size()-1;
         CandidatesSoACollection tkCandidates(nCandidates, queue);
         auto CandidatesdeviceView = tkCandidates.view();
-        if (verbose_) std::cout << "CandidatesSoACollection done " << nCandidates << std::endl;
+        ///if (verbose_) std::cout << "CandidatesSoACollection done " << nCandidates << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -286,7 +287,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         size_t ngeoClusters = clustergeometry.view().metadata().size()-1;
         ClusterGeometrysSoACollection tkgeoclusters(ngeoClusters, queue);
         auto deviceView = tkgeoclusters.view();
-        if (verbose_) std::cout << "ClusterGeometrysSoACollection done " << ngeoClusters << std::endl;
+        ///if (verbose_) std::cout << "ClusterGeometrysSoACollection done " << ngeoClusters << std::endl;
         //- - - - - - - - - - - - - - - - - - -
 
 
@@ -319,7 +320,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         alpaka::memcpy(queue, tkgeoclusters.buffer(), clustergeometry.buffer());
         //alpaka::wait(queue);  // Ensure copy is finished before checking
 
-        if (verbose_) std::cout << "Most memcpy done" << std::endl;
+        ///if (verbose_) std::cout << "Most memcpy done" << std::endl;
 /*
         // Handling the per cluster calculation attributes in a struct
         std::vector<clusterProperties> gpuAlgo;
@@ -330,7 +331,7 @@ std::cout << "BBBBBBBBBBB" << std::endl;
 */
 //        alpaka::wait(queue);  // Ensure copy is finished before checking
         
-        if (verbose_) std::cout << "All memcpy done" << std::endl;
+        ///if (verbose_) std::cout << "All memcpy done" << std::endl;
 
         // Handling a global counter of the output (new) clusters (initialized to zero here)
         auto clusterCounterDevice = cms::alpakatools::make_device_buffer<uint32_t>(queue);
@@ -340,10 +341,8 @@ std::cout << "BBBBBBBBBBB" << std::endl;
         alpaka::memset(queue, pixelCounterDevice, 0);
 
         alpaka::wait(queue);  // Ensure the transfer is complete
-
-
         // Execute the kernel
-        if (verbose_) std::cout << "About to start the kernel" << std::endl;
+        ///if (verbose_) std::cout << "About to start the kernel" << std::endl;
         Splitting::runKernels<pixelTopology::Phase1>(
             ////tkHit.view(), 
             tkDigi.view(), tkClusters.view(), tkCandidates.view(), 

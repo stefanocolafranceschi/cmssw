@@ -501,6 +501,17 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
   //>(512,std::vector<SiPixelCluster::Pixel *>(512,0)));
 
   for (int cl = 0; cl < (int)meanExp; cl++) {
+/*
+        for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
+            
+            std::cout << " OSplit cl=" << cl
+                      << " pixel_X[" << j << "]=" << pixelsForCl[cl][j].x
+                      << " pixel_Y[" << j << "]=" << pixelsForCl[cl][j].y
+                      << " ADC=" << pixelsForCl[cl][j].adc
+                      << std::endl;
+        }
+*/
+
     if (verbose)
       std::cout << "Pixels of cl " << cl << " ";
     for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
