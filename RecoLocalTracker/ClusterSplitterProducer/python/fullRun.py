@@ -3,7 +3,8 @@ import FWCore.ParameterSet.Config as cms
 from Geometry.CommonTopologies.globalTrackingGeometry_cfi import *
 from Geometry.TrackerGeometryBuilder.trackerGeometry_cfi import *
 from Configuration.ProcessModifiers.alpaka_cff import alpaka
-process = cms.Process("RECOCC",alpaka)
+#from Configuration.Eras.Era_Phase2_cff import Phase2
+process = cms.Process("RECOCC",alpaka)#, Phase2)
 
 process.load('Configuration.StandardSequences.MagneticField_cff')
 process.load('Configuration.StandardSequences.Services_cff')
@@ -49,8 +50,6 @@ process.candidateDataSoA = cms.EDProducer("HelperSplitter",
 # trial producer (which uses the output from HelperSplitter)
 process.trial = cms.EDProducer(
     "trial",
-    #nHits=cms.uint32(100),
-    #offset=cms.int32(10),
     ptMin=cms.double(100),
     deltaR=cms.double(0.05),
     chargeFracMin=cms.double(2.0),
@@ -76,10 +75,11 @@ process.trial = cms.EDProducer(
     geometryInput=cms.InputTag("candidateDataSoA"),
     verbose=cms.bool(False),
     debugMode = cms.bool(False),             #is True, only one cluster will be analyzed
-    targetDetId = cms.int32(304152592),
-    targetClusterOffset = cms.int32(0),
+    targetDetId = cms.int32(303079440),
+    targetClusterOffset = cms.int32(5),
     targetEvent = cms.int32(1),    
     vertices = cms.InputTag('offlinePrimaryVertices'),
+    maxPixels = cms.InputTag('candidateDataSoA')
 )
 
 process.FastTimerService = cms.Service("FastTimerService",

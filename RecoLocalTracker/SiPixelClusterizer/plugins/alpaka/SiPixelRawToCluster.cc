@@ -92,10 +92,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         useQuality_(iConfig.getParameter<bool>("UseQualityInfo")),
         clusterThresholds_{iConfig.getParameter<int32_t>("clusterThreshold_layer1"),
                            iConfig.getParameter<int32_t>("clusterThreshold_otherLayers"),
-                           static_cast<float>(iConfig.getParameter<double>("VCaltoElectronGain")),
-                           static_cast<float>(iConfig.getParameter<double>("VCaltoElectronGain_L1")),
-                           static_cast<float>(iConfig.getParameter<double>("VCaltoElectronOffset")),
-                           static_cast<float>(iConfig.getParameter<double>("VCaltoElectronOffset_L1"))} {
+                           static_cast<float>(47),
+                           static_cast<float>(50),
+                           static_cast<float>(-60),
+                           static_cast<float>(-670)} {
     if (includeErrors_) {
       digiErrorPutToken_ = produces();
       fmtErrorToken_ = produces();

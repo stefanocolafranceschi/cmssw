@@ -108,8 +108,8 @@ namespace gpuCalibPixel {
           adc_int = int((adc_int + 0.5) * ElectronPerADCGain);
         else {
           const int8_t dspp = (Phase2ReadoutMode < 10 ? Phase2ReadoutMode : 10);
-          const int8_t ds = int8_t(dspp <= 1 ? 1 : (dspp - 1) * (dspp - 1));
-
+//          const int8_t ds = int8_t(dspp <= 1 ? 1 : (dspp - 1) * (dspp - 1));
+const int8_t ds = int8_t(dspp <= 1 ? 1 : (1 << (dspp - 1)));
           adc_int -= Phase2KinkADC;
           adc_int *= ds;
           adc_int += Phase2KinkADC;

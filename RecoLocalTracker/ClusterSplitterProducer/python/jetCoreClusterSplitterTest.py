@@ -33,7 +33,7 @@ process.jetCoreClusterSplitterTest = cms.EDProducer("JetCoreClusterSplitter",
     pixelClusters = cms.InputTag('siPixelClustersPreSplitting', '', 'RECO'),
     vertices              = cms.InputTag('offlinePrimaryVertices'),
     pixelCPE              = cms.string("PixelCPEGeneric"),
-    verbose               = cms.bool(False),
+    verbose               = cms.bool(True),
     #debugMode             = cms.bool(False),         #is True, only one cluster will be analyzed
     #targetDetId           = cms.int32(304185360),
     #targetClusterOffset   = cms.int32(5),
@@ -84,7 +84,7 @@ process.source = cms.Source("PoolSource",
     #fileNames = cms.untracked.vstring('file:step3my.root')
     fileNames = cms.untracked.vstring('file:largestep3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(999))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 
 # Output module
 process.RECOSIMoutput = cms.OutputModule("PoolOutputModule",

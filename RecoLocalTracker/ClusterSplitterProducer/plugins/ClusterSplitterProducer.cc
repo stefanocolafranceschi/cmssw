@@ -127,6 +127,9 @@ private:
   const device::EDPutToken<CandidatesSoACollection> CandidatesSoACollection_;
   const device::EDPutToken<ClusterGeometrysSoACollection> ClusterGeometrysSoACollection_;
   const device::EDPutToken<SiPixelDigisSoACollection> SiPixelDigisSoACollection_;
+  const edm::EDPutTokenT<uint32_t> maxPixelsToken_;
+
+
   //const device::EDPutToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> SiPixelDigisSoACollection_;
 
 };
@@ -148,7 +151,10 @@ HelperSplitter::HelperSplitter(edm::ParameterSet const& iConfig)
       verbose_(iConfig.getParameter<bool>("verbose")),      
       CandidatesSoACollection_{produces()},
       ClusterGeometrysSoACollection_{produces()},    
-      SiPixelDigisSoACollection_{produces()}      
+      SiPixelDigisSoACollection_{produces()},
+      maxPixelsToken_{produces()}
+
+      
 {}
 
 
@@ -252,6 +258,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
 
     size_t clusterIndex = 0;
     size_t pixelIdx = 0;
+    size_t maxPixelsInACluster = 0;
 
     std::unordered_map<uint32_t, size_t> moduleStartPixelIdx;
 
@@ -292,12 +299,18 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             uint32_t pixelStart = pixelIdx;
             uint32_t pixelCount = originalpixels.size();
 
+            // Update max if this cluster is larger
+            if (pixelCount > maxPixelsInACluster) {
+                maxPixelsInACluster = pixelCount;
+            }
+
             geoclusterView.moduleId(clusterIndex) = moduleId;
             geoclusterView.clusterOffset(clusterIndex) = localClusterIdx;
             geoclusterView.pixelStart(clusterIndex) = pixelStart;
             geoclusterView.pixelCount(clusterIndex) = pixelCount;
 
             uint32_t ClusterCharge = 0;
+            uint32_t expandedSize = 0;
             for (const auto& pixel : originalpixels) {
                 digiView.xx(pixelIdx) = pixel.x;
                 digiView.yy(pixelIdx) = pixel.y;
@@ -358,6 +371,9 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     iEvent.emplace(CandidatesSoACollection_, std::move(tkCandidatesDevice));
     iEvent.emplace(ClusterGeometrysSoACollection_, std::move(tkClusterGeometryDevice));
     iEvent.emplace(SiPixelDigisSoACollection_, std::move(tkDigiDevice));
+
+    uint32_t maxPixels = maxPixelsInACluster;
+    iEvent.emplace(maxPixelsToken_, std::move(maxPixels));
 }
 
 void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {

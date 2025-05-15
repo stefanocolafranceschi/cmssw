@@ -10,7 +10,8 @@ def customize_step3(process):
     process.trial = process.clusterSplitterGPU.clone(
         candidateInput = cms.InputTag("candidateDataSoA"),
         geometryInput = cms.InputTag("candidateDataSoA"),
-        siPixelDigis = cms.InputTag("candidateDataSoA")
+        siPixelDigis = cms.InputTag("candidateDataSoA"),
+        maxPixels = cms.InputTag("candidateDataSoA")
     )
 
     if not hasattr(process, "clusterSplitterSequence"):
@@ -44,6 +45,14 @@ def customize_step3(process):
         writeJSONSummary         = cms.untracked.bool(True),
         jsonFileName             = cms.untracked.string('step3_timing.json'),
     )
+
+#    process.options = cms.untracked.PSet(
+#        IgnoreCompletely = cms.untracked.vstring(),
+#        Rethrow = cms.untracked.vstring(),
+#        TryToContinue = cms.untracked.vstring(),
+#        accelerators = cms.untracked.vstring('cpu'),
+#    )
+
 
     if not hasattr(process, "dqm_step"):
         process.dqm_step = cms.Path(process.dqmSaver)

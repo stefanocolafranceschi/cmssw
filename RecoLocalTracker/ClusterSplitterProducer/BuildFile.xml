@@ -12,4 +12,3 @@
 <use name="RecoLocalTracker/SiStripClusterizer"/>
 <use name="RecoLocalTracker/ClusterParameterEstimator"/>
 <use name="RecoLocalTracker/Records"/>
-<flags ALPAKA_BACKENDS="!serial"/>

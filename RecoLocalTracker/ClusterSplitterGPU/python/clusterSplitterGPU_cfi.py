@@ -17,8 +17,8 @@ clusterSplitterGPU = cms.EDProducer("trial",
     forceYError = cms.double(150),
     fractionalWidth = cms.double(0.4),
     siPixelClusters = cms.InputTag("siPixelClustersPreSplittingAlpaka", "", "RECO"),
-    #siPixelDigis = cms.InputTag("candidateDataSoA"),
-    siPixelDigis = cms.InputTag("siPixelClustersPreSplittingAlpaka"),    
+    siPixelDigis = cms.InputTag("candidateDataSoA"),
+    #siPixelDigis = cms.InputTag("siPixelClustersPreSplittingAlpaka"),    
     #trackingRecHits = cms.InputTag("siPixelRecHitsPreSplittingAlpaka"),
     candidateInput = cms.InputTag("candidateDataSoA"),
     geometryInput = cms.InputTag("candidateDataSoA"),
@@ -27,7 +27,8 @@ clusterSplitterGPU = cms.EDProducer("trial",
     targetDetId = cms.int32(304181256),
     targetClusterOffset = cms.int32(2),
     targetEvent = cms.int32(1),
-    vertices = cms.InputTag("offlinePrimaryVertices")
+    vertices = cms.InputTag("offlinePrimaryVertices"),
+    maxPixels = cms.InputTag("candidateDataSoA")
 )
 
 clusterSplitterGPUTask = cms.Task(clusterSplitterGPU)

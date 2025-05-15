@@ -325,11 +325,11 @@ std::vector<SiPixelCluster> JetCoreClusterSplitter::fittingSplit(const SiPixelCl
 int StartWith = originalpixels.size();
 
   std::vector<std::pair<int, SiPixelCluster::Pixel>> pixels;
-////std::cout << "Original Pixel : " << std::endl;
+std::cout << "Original Pixel : " << std::endl;
 int aaa=0;
   for (unsigned int j = 0; j < originalpixels.size(); j++) {
 
-////std::cout << originalpixels[j].adc  << std::endl;
+std::cout << originalpixels[j].adc  << std::endl;
 
     int sub = originalpixels[j].adc / chargePerUnit_ * expectedADC / centralMIPCharge_;
     if (sub < 1)
@@ -512,18 +512,19 @@ std::cout << "Expecting " << aaa << " pixels " << std::endl;
   //pixelMap(meanExp,std::vector<std::vector<SiPixelCluster::PixelPos *>
   //>(512,std::vector<SiPixelCluster::Pixel *>(512,0)));
 int kkk=0;
+int totalChargeTest =0;
   for (int cl = 0; cl < (int)meanExp; cl++) {
-    /*
         for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
             kkk++;
             std::cout << " OSplit cl=" << cl
                       << " pixel_X[" << j << "]=" << pixelsForCl[cl][j].x
                       << " pixel_Y[" << j << "]=" << pixelsForCl[cl][j].y
                       << " ADC=" << pixelsForCl[cl][j].adc
+<< "Total= "
                       << std::endl;
         }
       if (kkk>StartWith) std::cout << " OOOOPS, the output contains an extra pixel?!? " << std::endl;
-*/
+
     if (verbose)
       std::cout << "Pixels of cl " << cl << " ";
     for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {

@@ -129,6 +129,7 @@ private:
   uint16_t targetClusterOffset;
   int targetEvent;
   edm::EDGetTokenT<reco::VertexCollection> vertices_;
+  edm::EDGetTokenT<uint32_t> maxPixelsToken_;
   const device::EDPutToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> outputdigisToken_;
   std::vector<Device> devices_;  
 };
@@ -163,6 +164,7 @@ trial::trial(edm::ParameterSet const& iConfig)
       targetClusterOffset(iConfig.getParameter<int>("targetClusterOffset")),
       targetEvent(iConfig.getParameter<int>("targetEvent")),
       vertices_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertices"))),
+      maxPixelsToken_(consumes<uint32_t>(iConfig.getParameter<edm::InputTag>("maxPixels"))),
       outputdigisToken_{produces()}
       {
           devices_ = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
@@ -179,18 +181,21 @@ trial::~trial() {
 
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
 
-/*
+
     if ((debugMode) && (deviceEvent.id().event() != static_cast<edm::EventNumber_t>(targetEvent))) {
         std::cout << "Skipping this event" << std::endl;
         return;
     }
-*/
 
-    //if (deviceEvent.id().event() !=123) return;
+
+    // Retrieve the value of maxPixels
+    const uint16_t maxPixelsRetrieved = deviceEvent.get(maxPixelsToken_);
+
+    //if (deviceEvent.id().event() !=563) return;
 
     //if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
 
-    // Ensure we're selecting the first available GPU device
+    // Ensure we're selecting the first available GPU device PlatformCudaRt vs PlatformCpu
     auto const& deviceList = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
     if (deviceList.empty()) {
         throw cms::Exception("Configuration") << "No available Alpaka GPU devices found!";
@@ -230,20 +235,6 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
     ///if (verbose_) std::cout << "Event offset: " << eventOffset << std::endl;
     for (const auto& device : devices_) {
         Queue queue(device);
-/*
-        // Define moduleStart data
-        auto moduleStartH =
-            cms::alpakatools::make_host_buffer<uint32_t[]>(queue, pixelTopology::Phase1::numberOfModules + 1);
-        for (size_t i = 0; i < pixelTopology::Phase1::numberOfModules + 1; ++i) {
-          moduleStartH[i] = i * 2;
-        }
-        auto moduleStartD =
-            cms::alpakatools::make_device_buffer<uint32_t[]>(queue, pixelTopology::Phase1::numberOfModules + 1);
-        alpaka::memcpy(queue, moduleStartD, moduleStartH);
-        //alpaka::wait(queue);            // Ensure the data copy is complete
-
-*/
-        ///if (verbose_) std::cout << "Module Start (host/device) done" << std::endl;
 
         // ------------- CREATE DEVICE BUFFERS -------------------------------
 
@@ -289,6 +280,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         auto deviceView = tkgeoclusters.view();
         ///if (verbose_) std::cout << "ClusterGeometrysSoACollection done " << ngeoClusters << std::endl;
         //- - - - - - - - - - - - - - - - - - -
+
 
 
         /* Vertices                    */
@@ -355,7 +347,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             pixelCounterDevice.data(),
             forceXError_, forceYError_, 
             vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
-            verbose_, debugMode, targetDetId, targetClusterOffset, queue);
+            verbose_, debugMode, targetDetId, targetClusterOffset, maxPixelsRetrieved, queue);
 
 
         // Update from device to host
@@ -406,6 +398,7 @@ void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     desc.add<int>("targetClusterOffset");
     desc.add<int>("targetEvent");    
     desc.add<edm::InputTag>("vertices", edm::InputTag("offlinePrimaryVertices"));    
+    desc.add<edm::InputTag>("maxPixels", edm::InputTag("maxPixels"));    
     descriptions.add("trial", desc);
 }
 

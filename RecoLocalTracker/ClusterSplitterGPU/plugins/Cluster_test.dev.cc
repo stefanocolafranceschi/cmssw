@@ -53,7 +53,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   using namespace cms::alpakatools;
   namespace Splitting {
 
-    template <typename TrackerTraits>
+    template <typename TrackerTraits, uint32_t maxPixels>
     struct JetSplit {
 
         // Main operator function
@@ -177,10 +177,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     return;
                 }
 
-                if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
-                    // Avoid crash if the end is kinda wrong/overflown
-                    return;
-                }
+                //if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
+                //    // Avoid crash if the end is kinda wrong/overflown
+                //    return;
+                //}
 
 /*
                 // Print all about this cluster under study.........
@@ -511,6 +511,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 uint16_t sizeY = expSizeY;
                 uint16_t meanExp = std::floor( ClusterCharge / expectedADC + 0.5f);
 
+
                 if (meanExp <= 1) {
                     ///if (verbose_) printf("meanExp <= 1 writing cluster");
                     storeOutputDigis(acc, digiView, outputDigis, begin, end, clusterCounterDevice, pixelCounterDevice);
@@ -524,8 +525,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     for (uint16_t j = 0; j < meanExp; j++) {
                         oldclx[j] = -999;
                         oldcly[j] = -999;
-                        clx[j] = digiView.xx(begin) + j;
-                        cly[j] = digiView.yy(begin) + j;
+                        clx[j] = pixelX_cache[0]; //  digiView.xx(begin) + j;
+                        cly[j] = pixelY_cache[0];  //digiView.yy(begin) + j;
                         cls[j] = 0;
                     }
                     bool stop = false;
@@ -548,10 +549,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 int temp_originalpixels_x = -1;
                                 int temp_originalpixels_y = -1;
 
-                                for (uint16_t jj = begin; jj < end; ++jj) {
+                                //for (uint16_t jj = begin; jj < end; ++jj) {
+                                for (uint16_t jj = 0; jj < maxPixels; ++jj) {
                                     if (j == pixelIdx) {
-                                        temp_originalpixels_x = digiView.xx(jj);
-                                        temp_originalpixels_y = digiView.yy(jj);
+                                        temp_originalpixels_x = pixelX_cache[jj]; //digiView.xx(jj);
+                                        temp_originalpixels_y = pixelY_cache[jj]; //digiView.yy(jj);
                                         break;
                                     }
                                     ++j;
@@ -629,6 +631,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                                     subpixel_counter++;
 
+                                    if (subpixel_counter >= extendedMaxPixels) {
+                                        printf("extendedMaxPixels is %u not enough to accomodate pixels", extendedMaxPixels);
+                                        return;
+                                    }
+
                                     if (i > static_cast<uint32_t>(pixel_index)) break;
                                     if (i != static_cast<uint32_t>(pixel_index)) continue;
 
@@ -679,6 +686,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         }
 
 
+
                         // Recompute cluster centers
                         if (verbose_) printf("Recomputing cluster centers.........\n");
 
@@ -694,7 +702,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             cly[subcluster_index] = 0;
                             cls[subcluster_index] = 1e-38f;//1e-99;
                         }
-
 
                         int nnn = 0 ;
                         for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
@@ -714,6 +721,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 cly[ clusterForPixel[nnn] ] += y * charge;
                                 cls[ clusterForPixel[nnn] ] += charge;
                                 nnn++;
+
+                                if (nnn >= extendedMaxPixels) {
+                                    printf("extendedMaxPixels is %u not enough to accomodate pixels", extendedMaxPixels);
+                                    return;
+                                }
                             }
                         }
 
@@ -726,6 +738,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             if (verbose_) printf("Center for cluster, clx[%u]=%f cly[%u]=%f\n",subcluster_index, clx[subcluster_index], subcluster_index, cly[subcluster_index]);
                             cls[subcluster_index] = 0;
                         }
+
                     }
 
                     //storeOutputDigis
@@ -760,22 +773,23 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             if (writeCharge > 0) {
                                 uint32_t outIdx = pixelStartWritingAt + pixelOffset;
 
-                                if (kkk > (end - begin)) {
-                                    printf("Error, more clusters than original");
-                                    return;
-                                }
 
+                                if (outIdx >= static_cast<uint32_t>(outputDigis.metadata().size() ) ) {
+                                    printf("WARNING: Attempting to write beyond outputDigis capacity! outIdx=%u size=%u\n",
+                                           outIdx, outputDigis.metadata().size());
+                                    return;  // or continue, or handle however is appropriate
+                                }
                                 outputDigis.clus(outIdx)      = clusterIndex;
                                 outputDigis.xx(outIdx)        = x;
                                 outputDigis.yy(outIdx)        = y;
                                 outputDigis.adc(outIdx)       = writeCharge;
                                 outputDigis.rawIdArr(outIdx)  = rawIdArr;
                                 outputDigis.moduleId(outIdx)  = moduleId;
-
                                 alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
 
-                                printf("NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
-                                       cl, rawIdArr, i, x, i, y, writeCharge);
+
+                                //printf("NSplit %u cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+                                //       kkk, cl, rawIdArr, i, x, i, y, writeCharge);
 
                                 pixelOffset++;
                                 kkk++;
@@ -815,10 +829,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,
                     bool verbose_,
                     bool debugMode, int targetDetId, uint16_t targetClusterOffset,
+                    uint16_t maxPixelsRetrieved,
                     Queue& queue) {
 
     // Get the number of items per block (threads per block)
-    const uint32_t threadsPerBlock = 128;
+    uint32_t threadsPerBlock = 128;
+
+    if (maxPixelsRetrieved <= 64)
+        threadsPerBlock = 128;
+    else if (maxPixelsRetrieved <= 128)
+        threadsPerBlock = 64;
+    else
+        threadsPerBlock = 32;
+
 
     // Calculate how many groups (blocks) you need for each view
     const uint32_t numBlocks = (geoclusterView.metadata().size() + threadsPerBlock - 1) / threadsPerBlock;
@@ -835,14 +858,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     ///                      << " threads in total" << std::endl;
 
 
-    ///if (verbose_) std::cout << "In the kernel... " << std::endl;
+    if (verbose_) std::cout << "In the kernel... " << std::endl;
 
-    // std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
+    //std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
 
-                // Kernel executions AccCpuSerial should be Acc1D
+    //std::cout << "MaxPixelRetrieved " << maxPixelsRetrieved << std::endl;
+
+    if (maxPixelsRetrieved<16) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits>{}, 
+                                    JetSplit<TrackerTraits, 16>{},
                                     //hitView, 
                                     digiView, 
                                     clusterView, 
@@ -867,6 +892,124 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
                                     verbose_, debugMode, targetDetId, targetClusterOffset);
             }
+    else if (maxPixelsRetrieved<32) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplit<TrackerTraits, 32>{},
+                                    //hitView, 
+                                    digiView, 
+                                    clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    forceXError_,
+                                    forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset);
+            }
+    else if (maxPixelsRetrieved<64) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplit<TrackerTraits, 64>{},
+                                    //hitView, 
+                                    digiView, 
+                                    clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    forceXError_,
+                                    forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset);
+            }
+    else if (maxPixelsRetrieved<128) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplit<TrackerTraits, 128>{},
+                                    //hitView, 
+                                    digiView, 
+                                    clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    forceXError_,
+                                    forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset);
+            }
+    else if (maxPixelsRetrieved<256) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplit<TrackerTraits, 256>{},
+                                    //hitView, 
+                                    digiView, 
+                                    clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    forceXError_,
+                                    forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset);
+            }
+    else {
+            std::cout << "No kernel available for the given amount of pixels: " << maxPixelsRetrieved << std::endl;
+        }
+
+    }
+
 
     // Explicit template instantiation for Phase 1
     template void runKernels<pixelTopology::Phase1>(//TrackingRecHitSoAView<pixelTopology::Phase1>& hitView,
@@ -892,6 +1035,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                     double forceYError_,
                                                     float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,
                                                     bool verbose_, bool debugMode, int targetDetId, uint16_t targetClusterOffset,
+                                                    uint16_t maxPixelsRetrieved,
                                                     Queue& queue);
 
     // Explicit template instantiation for Phase 2
@@ -918,6 +1062,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                     double forceYError_,
                                                     float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,                                                    
                                                     bool verbose_, bool debugMode, int targetDetId, uint16_t targetClusterOffset,
+                                                    uint16_t maxPixelsRetrieved,
                                                     Queue& queue);
   }  // namespace Splitting
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE
