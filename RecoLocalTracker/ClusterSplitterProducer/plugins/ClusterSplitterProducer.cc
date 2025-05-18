@@ -272,6 +272,8 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
         uint16_t moduleId = static_cast<uint16_t>(gind);
 
         uint32_t rawId = detset.id();
+        // discriminate barrel vs endcap and set the tanLorentzAngle_ appropiately
+        // to do this
 
         const PixelTopology& topo = static_cast<const PixelTopology&>(det->topology());
         float pitchX, pitchY;
@@ -329,6 +331,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             geoclusterView.pitchX(clusterIndex) = pitchX;
             geoclusterView.pitchY(clusterIndex) = pitchY;
             geoclusterView.thickness(clusterIndex) = thickness;
+            geoclusterView.tanLorentzAngles(clusterIndex) = tanLorentzAngle_;            
             geoclusterView.sizeX(clusterIndex) = aCluster.sizeX();
             geoclusterView.sizeY(clusterIndex) = aCluster.sizeY();
             geoclusterView.x(clusterIndex) = cPos.x();
@@ -350,6 +353,7 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
             localClusterIdx++;
         }
     }
+
 
     if (verbose_) std::cout << "Done with siPixelClusters (cpu)" << std::endl;
 
@@ -382,8 +386,8 @@ void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptio
     desc.add<bool>("verbose", false)->setComment("Verbose output");
     desc.add<double>("ptMin", 0.5)->setComment("Minimum pt for filtering candidates");
     desc.add<std::string>("pixelCPE", "PixelCPEGeneric");
-    desc.add<double>("tanLorentzAngle", 0.1)->setComment("Lorentz angle tangent");
-    desc.add<double>("tanLorentzAngleBarrelLayer1", 0.2)->setComment("Lorentz angle tangent for Barrel Layer 1");
+    desc.add<double>("tanLorentzAngle", 0.0)->setComment("Lorentz angle tangent");
+    desc.add<double>("tanLorentzAngleBarrelLayer1", 0.0)->setComment("Lorentz angle tangent for Barrel Layer 1");
     desc.add<edm::InputTag>("siPixelClusters", edm::InputTag("siPixelClusters"))->setComment("Collection for siPixelClusters");
     //desc.add<edm::InputTag>("siPixelClustersSoA", edm::InputTag("siPixelClustersSoA"))->setComment("Collection for siPixelClustersSoA");
     desc.add<edm::InputTag>("Candidate", edm::InputTag("Candidate"))->setComment("Candidates");

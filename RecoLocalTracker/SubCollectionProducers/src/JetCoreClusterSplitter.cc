@@ -140,6 +140,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
 
   Handle<edmNew::DetSetVector<SiPixelCluster>> inputPixelClusters;
   iEvent.getByToken(pixelClusters_, inputPixelClusters);
+    if (iEvent.id().event() !=835) return;
 
   Handle<std::vector<reco::Vertex>> vertices;
   iEvent.getByToken(vertices_, vertices);
@@ -180,6 +181,9 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
 
             LocalVector jetDirLocal = det->surface().toLocal(jetDir);
             float jetTanAlpha = jetDirLocal.x() / jetDirLocal.z();
+            std::cout << "jetDirLocal.z() = " << jetDirLocal.z() << std::endl;
+            
+            return;
             float jetTanBeta = jetDirLocal.y() / jetDirLocal.z();
             float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
             float expSizeX = expSizeXAtLorentzAngleIncidence_ +
@@ -335,7 +339,7 @@ int aaa=0;
     if (sub < 1)
       sub = 1;
     int perDiv = originalpixels[j].adc / sub;
-    if (verbose)
+
       std::cout << "Splitting  " << j << "  in [ " << pixels.size() << " , " << pixels.size() + sub
                 << " ], expected numb of clusters: " << meanExp << " original pixel (x,y) " << originalpixels[j].x
                 << " " << originalpixels[j].y << " sub " << sub << std::endl;
@@ -388,7 +392,6 @@ std::cout << "Expecting " << aaa << " pixels " << std::endl;
           dist += 1.f * (2.f * distanceMapY[j][i] / sizeY) * (2.f * distanceMapY[j][i] / sizeY);
         }
         distanceMap[j][i] = sqrt(dist);
-        if (verbose)
           std::cout << "Cluster " << i << " Original Pixel " << j << " distances: " << distanceMapX[j][i] << " "
                     << distanceMapY[j][i] << " " << distanceMap[j][i] << std::endl;
       }
@@ -401,6 +404,10 @@ std::cout << "Expecting " << aaa << " pixels " << std::endl;
     // Using different rankings to improve convergence (as Giulio proposed)
     scores = secondDistScore(distanceMap);
 
+printf("Sorted scores (by second-best distance):\n");
+for (const auto& [score, pixelIdx] : scores) {
+    printf("Pixel index: %d, Score (second best distance): %.3f\n", pixelIdx, score);
+}
     // Iterate starting from the ones with furthest second best clusters, i.e.
     // easy choices
     std::vector<float> weightOfPixel(pixels.size());
@@ -528,6 +535,13 @@ int kkk=0;
       std::cout << "Pixels of cl " << cl << " ";
     for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
       SiPixelCluster::PixelPos newpix(pixelsForCl[cl][j].x, pixelsForCl[cl][j].y);
+
+
+
+                                printf("OSplit cl=%d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+                                       cl, j, pixelsForCl[cl][j].x, j, pixelsForCl[cl][j].x, pixelsForCl[cl][j].adc);
+
+
       if (verbose)
         std::cout << pixelsForCl[cl][j].x << "," << pixelsForCl[cl][j].y << "|";
       if (j == 0) {

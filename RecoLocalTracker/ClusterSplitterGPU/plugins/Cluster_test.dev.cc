@@ -90,7 +90,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             // Compute the global thread ID
             uint32_t globalThreadId = blockIdx * blockDim + threadIdx;
             uint16_t moduleId;
-            uint32_t clusterOffset;
+
 
 /*
             /////////////////////////////////////////////////////
@@ -144,10 +144,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 }
 
                 uint32_t clusterIdx = globalThreadId;      // Each thread handles exactly one cluster
-                //clusterIdx=387;   //sample test
+                //clusterIdx=651; // test 18 494 651 387;   //sample test
 
                 moduleId = geoclusterView.moduleId(clusterIdx);
-                clusterOffset = geoclusterView.clusterOffset(clusterIdx);
+                //uint32_t clusterOffset = geoclusterView.clusterOffset(clusterIdx);
 /*
                 if (debugMode) {
                     //uint32_t clusterIdx = 327;
@@ -173,14 +173,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 uint32_t ClusterCharge = geoclusterView.ClusterCharge(clusterIdx);
 
                 // NO ENOUGH SPACE ON THE TEMPORARY ARRAY
-                if (pixelCounter > maxPixels) {
+                if (pixelCounter > maxPixels) return;
+
+                if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
+                    // Avoid crash if the end is kinda wrong/overflown
                     return;
                 }
-
-                //if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
-                //    // Avoid crash if the end is kinda wrong/overflown
-                //    return;
-                //}
 
 /*
                 // Print all about this cluster under study.........
@@ -204,7 +202,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 */
 
                 //printf("I am in thread %u, analyzing cluster %u from module %u offset %u\n", 
-                //       globalThreadId, clusterOffset, moduleId, clusterOffset);
+                //       globalThreadId, clusterOffset, moduleId, clusterOffset);e
 
                 // Access fine-tuned Global position (previously saved into the GeoCluster SoA)
                 float x = geoclusterView.x(clusterIdx);
@@ -226,8 +224,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     //    clusterIdx, candIdx, numCandidates-1, blockIdx, blockDim, blockDim * alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
 
                     // Debugging Candidate to be compared to the one originated in the other producer
-                    //double testme = static_cast<double>(candidateView[candIdx].px());
-                    //printf("Candidate %u px= %f \n", candIdx, testme);   
+                    //printf("Candidate %u px= %f \n", candIdx, static_cast<double>(candidateView[candIdx].px() );   
 
                     // Skip low-pt jets
                     if (candidateView.pt(candIdx) < ptMin_) {
@@ -235,7 +232,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         continue;
                     }
 
-  
                     // Extract jet momentum components from candidateView
                     float jetPx = candidateView.px(candIdx);
                     float jetPy = candidateView.py(candIdx);
@@ -275,34 +271,376 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         ///    }
                         ///}
 
-                        splitCluster(acc,
-                                     //hitView,
-                                     digiView,
-                                     clusterView,
-                                     clusterIdx,
-                                     moduleId,
-                                     clusterOffset,
-                                     jetPx, jetPy, jetPz, 
-                                     geoclusterView,                                     
-                                     chargeFracMin_,
-                                     expSizeXAtLorentzAngleIncidence_,
-                                     expSizeXDeltaPerTanAlpha_,
-                                     expSizeYAtNormalIncidence_,
-                                     centralMIPCharge_,
-                                     chargePerUnit_,
-                                     fractionalWidth_,
-                                     outputDigis,
-                                     outputClusters,
-                                     //clusterPropertiesDevice,
-                                     clusterCounterDevice,
-                                     pixelCounterDevice,                                     
-                                     forceXError_,
-                                     forceYError_,
-                                     verbose_,
-                                     ClusterCharge,
-                                     pixelCounter, 
-                                     begin, 
-                                     end);
+                        ///if (verbose_) printf("This cluster: %u now processed in SplitCluster routine\n",clusterIdx);
+
+                        // Local variables
+                        uint16_t pixelX_cache[maxPixels];
+                        uint16_t pixelY_cache[maxPixels];
+                        uint16_t pixelADC_cache[maxPixels];
+                        uint16_t pixel_info[maxPixels];
+                        uint32_t rawIdArr;
+
+                        float clx[maxSubClusters];
+                        float cly[maxSubClusters];
+                        float cls[maxSubClusters];
+                        float oldclx[maxSubClusters];
+                        float oldcly[maxSubClusters];
+
+                        uint16_t scoresIndices[maxPixels];
+                        float scoresValues[maxPixels];
+
+                        for (uint16_t i = 0; i < maxPixels; ++i) {
+                            scoresValues[i] = std::numeric_limits<float>::max();
+                            scoresIndices[i] = i;
+                        }
+
+                        uint16_t clusterForPixel[extendedMaxPixels];    //this has to contain the expanded duplicated array
+                        //float weightOfPixel[maxPixels];
+
+                        bool split = false;
+
+                        float expectedADC;
+                        float expSizeX, expSizeY;
+                        {
+                            //float pitchX = geoclusterView.pitchX(clusterIdx);
+                            float pitchY = geoclusterView.pitchY(clusterIdx);
+
+                            float thickness = geoclusterView.thickness(clusterIdx);
+                            float tanLorentzAngles = geoclusterView.tanLorentzAngles(clusterIdx);
+
+                            // Apply precomputed transformation matrix
+                            float jetDirLocalX = geoclusterView.transformXX(clusterIdx) * jetPx + geoclusterView.transformYX(clusterIdx) * jetPy + geoclusterView.transformZX(clusterIdx) * jetPz;
+                            float jetDirLocalY = geoclusterView.transformXY(clusterIdx) * jetPx + geoclusterView.transformYY(clusterIdx) * jetPy + geoclusterView.transformZY(clusterIdx) * jetPz;
+                            float jetDirLocalZ = geoclusterView.transformXZ(clusterIdx) * jetPx + geoclusterView.transformYZ(clusterIdx) * jetPy + geoclusterView.transformZZ(clusterIdx) * jetPz;
+
+                            // Now, proceed with your calculations
+                            float jetTanAlpha = jetDirLocalX / jetDirLocalZ;
+                            float jetTanBeta = jetDirLocalY / jetDirLocalZ;
+                            float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
+
+                            expSizeX = expSizeXAtLorentzAngleIncidence_ +
+                                             std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngles));
+
+                            expSizeY = std::sqrt((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
+                                                       thickness * thickness / (pitchY * pitchY) * jetTanBeta * jetTanBeta);
+                            
+                            if (expSizeX < 1.f) expSizeX = 1.f;
+                            if (expSizeY < 1.f) expSizeY = 1.f;
+
+                            expectedADC = std::sqrt(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
+             
+                            //printf("Trying to split: charge=%d expSizeX=%f expSizeY=%f\n",
+                            //        static_cast<int>(ClusterCharge), expSizeX, expSizeY);
+
+                            if ( ClusterCharge > expectedADC * chargeFracMin_ &&
+                                   ( geoclusterView.sizeX(clusterIdx) > expSizeX + 1 || geoclusterView.sizeY(clusterIdx) > expSizeY + 1)) {
+                                split = true;
+                            }
+                        }
+
+                        if (split) {
+
+                            // Filling local cache for faster access and sub (for avoiding repeated pixels large arrays)
+                            rawIdArr = digiView.rawIdArr(begin);
+                            for (uint16_t jj = begin, matchIdx = 0; jj < end && matchIdx < maxPixels; ++jj, ++matchIdx) {
+                                pixelX_cache[matchIdx] = digiView.xx(jj);
+                                pixelY_cache[matchIdx] = digiView.yy(jj);
+                                pixelADC_cache[matchIdx] = digiView.adc(jj);
+
+                                uint16_t sub = static_cast<int>(pixelADC_cache[matchIdx]) / chargePerUnit_ * expectedADC / centralMIPCharge_;
+                                if (sub < 1) sub = 1;
+                                pixel_info[matchIdx] = sub;
+                            }
+
+
+                            // Aligning to the original "fittingSplit" variables..
+                            uint16_t sizeX = expSizeX;
+                            uint16_t sizeY = expSizeY;
+                            uint16_t meanExp = std::floor( ClusterCharge / expectedADC + 0.5f);
+
+                            if (meanExp <= 1) {
+                                ///if (verbose_) printf("meanExp <= 1 writing cluster");
+                                storeOutputDigis(acc, digiView, outputDigis, begin, end, clusterCounterDevice, pixelCounterDevice);
+                            }
+                            else {
+                                // Splitting the pixels and writing them for the current clusterIdx
+                                ///if (verbose_) printf("cluster has meanExp=%d\n", meanExp);
+
+                                // Compute the initial values, set all distances and centers to -999
+                                ///if (verbose_) printf("Computing initial values, set all distances");
+                                for (uint16_t j = 0; j < meanExp; j++) {
+                                    oldclx[j] = -999;
+                                    oldcly[j] = -999;
+                                    clx[j] = pixelX_cache[0] + j;
+                                    cly[j] = pixelY_cache[0] + j;
+                                    cls[j] = 0;
+                                }
+                                bool stop = false;
+                                uint8_t remainingSteps = 100;
+
+                                // Refactored kernel with corrected distance scoring logic
+                                //while (!stop && remainingSteps > 0) {
+                                for (remainingSteps = 100; remainingSteps > 0 && !stop; --remainingSteps) {
+
+                                    if (verbose_) printf("---------------\n");
+                                    if (verbose_) printf("REMAINING STEPS : %d\n", remainingSteps);
+                                    //remainingSteps--;
+
+                                    for (uint16_t pixelIdx = 0; pixelIdx < pixelCounter; pixelIdx++) {
+                                        if (pixelIdx < maxPixels) {
+                                            float minDist = std::numeric_limits<float>::max();
+                                            float secondMinDist = std::numeric_limits<float>::max();
+
+                                            uint16_t j = 0;
+                                            float temp_originalpixels_x = -1;
+                                            float temp_originalpixels_y = -1;
+
+                                            for (uint16_t jj = 0; jj < pixelCounter; jj++) {
+                                            //for (uint16_t jj = begin; jj < end; ++jj) {
+                                                if (j == pixelIdx) {
+                                                    temp_originalpixels_x = pixelX_cache[jj];// digiView.xx(jj);
+                                                    temp_originalpixels_y = pixelY_cache[jj];//digiView.yy(jj);
+                                                    break;
+                                                }
+                                                ++j;
+                                            }
+
+                                            // If not found, skip this pixelIdx
+                                            if (temp_originalpixels_x == -1 || temp_originalpixels_y == -1) continue;
+
+                                            for (uint16_t subClusterIdx = 0; subClusterIdx < meanExp; subClusterIdx++) {
+                                                float distanceX = static_cast<float>(temp_originalpixels_x) - clx[subClusterIdx];
+                                                float distanceY = static_cast<float>(temp_originalpixels_y) - cly[subClusterIdx];
+
+                                                //printf("Pixel %d: clx[%d]=%.4f cly[%d]=%.4f original_x=%f original_y=%f\n",
+                                                //       pixelIdx, subClusterIdx, clx[subClusterIdx], subClusterIdx, cly[subClusterIdx],
+                                                //       temp_originalpixels_x, temp_originalpixels_y);
+
+                                                float distX = 0.f;
+                                                if (std::abs(distanceX) > sizeX / 2.f) {
+                                                    float diff = std::abs(distanceX) - sizeX / 2.f + 1.f;
+                                                    distX = diff * diff;
+                                                } else {
+                                                    float scaled = 2.f * distanceX / sizeX;
+                                                    distX = scaled * scaled;
+                                                }
+
+                                                float distY = 0.f;
+                                                if (std::abs(distanceY) > sizeY / 2.f) {
+                                                    float diff = std::abs(distanceY) - sizeY / 2.f + 1.f;
+                                                    distY = diff * diff;
+                                                } else {
+                                                    float scaled = 2.f * distanceY / sizeY;
+                                                    distY = scaled * scaled;
+                                                }
+
+                                                float dist = std::sqrt(distX + distY);
+                                                //printf("subClusterIdx=%u distX=%f distanceY=%f dist=%f\n", subClusterIdx, distanceX, distanceY, dist );
+
+                                                if (dist < minDist) {
+                                                    secondMinDist = minDist;
+                                                    minDist = dist;
+                                                } else if (dist < secondMinDist) {
+                                                    secondMinDist = dist;
+                                                }
+                                            }
+
+                                            // Score is based on -secondMinDist
+                                            scoresIndices[pixelIdx] = pixelIdx;
+                                            scoresValues[pixelIdx] = -secondMinDist;
+                                        }
+                                    }
+
+                                    // SORT SCORES ------------------------------------
+                                    for (uint16_t i = 0; i < pixelCounter - 1; i++) {
+                                        for (uint16_t j = 0; j < pixelCounter - i - 1; j++) {
+                                            if (scoresValues[j] > scoresValues[j + 1] ||
+                                                (scoresValues[j] == scoresValues[j + 1] && scoresIndices[j] > scoresIndices[j + 1])) {
+                                                std::swap(scoresValues[j], scoresValues[j + 1]);
+                                                std::swap(scoresIndices[j], scoresIndices[j + 1]);
+                                            }
+                                        }
+                                    }
+
+                                    if (verbose_) {
+                                        printf("Cluster %u Scores:\n", clusterIdx);
+                                        for (uint16_t k = 0; k < pixelCounter; k++) {
+                                            printf("Cluster %u Score = %.5f, Index = %d\n", clusterIdx, scoresValues[k], scoresIndices[k]);
+                                        }
+                                    }
+
+                                    // Iterating over Scores Indices and Values
+                                    for (uint16_t i = 0; i < pixelCounter && i < maxPixels; ++i) {
+                                        uint16_t pixel_index = scoresIndices[i];
+                                        int subpixel_counter=-1;
+
+                                        for (uint16_t i = 0; i < pixelCounter && i < maxPixels; ++i) {
+
+                                            // Subpixel "simulation"
+                                            uint16_t sub = pixel_info[i];
+                                            uint16_t adc = pixelADC_cache[i];
+                                            uint16_t perDiv = adc / sub;
+
+                                            for (uint16_t k = 0; k < sub; ++k) {
+
+                                                subpixel_counter++;
+
+                                                if (i > static_cast<uint32_t>(pixel_index)) break;
+                                                if (i != static_cast<uint32_t>(pixel_index)) continue;
+
+                                                float maxEst = 0.f;
+                                                int cl = -1;
+
+                                                float temp_x = pixelX_cache[i];
+                                                float temp_y = pixelY_cache[i];
+
+                                                for (uint16_t subcluster_index = 0; subcluster_index < meanExp && subcluster_index < maxSubClusters; ++subcluster_index) {
+                                                    float cx = clx[subcluster_index];
+                                                    float cy = cly[subcluster_index];
+                                                    float clusterSignal = cls[subcluster_index];
+
+                                                    float dx = temp_x - cx;
+                                                    float dy = temp_y - cy;
+
+                                                    float dist = 0.f;
+                                                    float absX = std::abs(dx), absY = std::abs(dy);
+
+                                                    if (absX > sizeX / 2.f)
+                                                        dist += (absX - sizeX / 2.f + 1.f) * (absX - sizeX / 2.f + 1.f);
+                                                    else
+                                                        dist += (2.f * dx / sizeX) * (2.f * dx / sizeX);
+
+                                                    if (absY > sizeY / 2.f)
+                                                        dist += (absY - sizeY / 2.f + 1.f) * (absY - sizeY / 2.f + 1.f);
+                                                    else
+                                                        dist += (2.f * dy / sizeY) * (2.f * dy / sizeY);
+
+                                                    float distance = std::sqrt(dist);
+                                                    float nsig = (clusterSignal - expectedADC) / (expectedADC * fractionalWidth_);
+                                                    float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f;
+                                                    float clDest = 1.f / (distance + 0.05f);
+                                                    float est = clQest * clDest;
+
+                                                    if (est > maxEst) {
+                                                        cl = subcluster_index;
+                                                        maxEst = est;
+                                                    }
+                                                }
+
+                                                uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
+                                                cls[cl] += charge;
+                                                clusterForPixel[subpixel_counter] = cl;
+                                            }
+                                        }
+                                    }
+
+
+                                    // Recompute cluster centers
+                                    if (verbose_) printf("Recomputing cluster centers.........\n");
+
+                                    stop = true;
+                                    for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
+                                        if (std::abs(clx[subcluster_index] - oldclx[subcluster_index]) > 0.01f)
+                                            stop = false; // still moving
+                                        if (std::abs(cly[subcluster_index] - oldcly[subcluster_index]) > 0.01f)
+                                            stop = false;
+                                        oldclx[subcluster_index] = clx[subcluster_index];
+                                        oldcly[subcluster_index] = cly[subcluster_index];
+                                        clx[subcluster_index] = 0;
+                                        cly[subcluster_index] = 0;
+                                        cls[subcluster_index] = 1e-38f;//1e-99;
+                                    }
+
+
+                                    int nnn = 0 ;
+                                    for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
+
+                                        uint16_t x = pixelX_cache[i];
+                                        uint16_t y = pixelY_cache[i];                                
+
+                                        // Subpixel "simulation"
+                                        uint16_t sub = pixel_info[i];
+                                        uint16_t adc = pixelADC_cache[i];
+                                        uint16_t perDiv = adc / sub;
+
+                                        for (uint16_t k = 0; k < sub; k++) {
+                                            uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
+
+                                            clx[ clusterForPixel[nnn] ] += x * charge;
+                                            cly[ clusterForPixel[nnn] ] += y * charge;
+                                            cls[ clusterForPixel[nnn] ] += charge;
+                                            nnn++;
+                                        }
+                                    }
+
+
+                                    for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
+                                        if (cls[subcluster_index] != 0) {
+                                            clx[subcluster_index] /= cls[subcluster_index];
+                                            cly[subcluster_index] /= cls[subcluster_index];
+                                        }
+                                        if (verbose_) printf("Center for cluster, clx[%u]=%f cly[%u]=%f\n",subcluster_index, clx[subcluster_index], subcluster_index, cly[subcluster_index]);
+                                        cls[subcluster_index] = 0;
+                                    }
+                                }
+
+                                //storeOutputDigis
+                                uint32_t kkk = 0;
+                                for (uint16_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
+
+                                    uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
+                                    uint32_t pixelStartWritingAt = alpaka::atomicAdd(acc, pixelCounterDevice, 0u);
+                                    uint32_t pixelOffset = 0;
+
+                                    int nnn = 0;
+
+                                    for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
+
+                                        uint16_t x = pixelX_cache[i];
+                                        uint16_t y = pixelY_cache[i];                                
+
+                                        uint16_t sub = pixel_info[i];
+                                        uint16_t adc = pixelADC_cache[i];
+                                        uint16_t perDiv = adc / sub;
+
+                                        uint32_t writeCharge = 0;
+
+                                        for (uint16_t k = 0; k < sub; k++, nnn++) {
+                                            if (clusterForPixel[nnn] == cl) {
+                                                uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
+                                                writeCharge += charge;
+                                            }
+                                        }
+
+                                        // Only write if this pixel contributed subpixels to cluster cl
+                                        if (writeCharge > 0) {
+                                            uint32_t outIdx = pixelStartWritingAt + pixelOffset;
+            /*
+                                            if (kkk > (end - begin)) {
+                                                printf("Error, more clusters than original");
+                                                return;
+                                            }
+
+                                            outputDigis.clus(outIdx)      = clusterIndex;
+                                            outputDigis.xx(outIdx)        = x;
+                                            outputDigis.yy(outIdx)        = y;
+                                            outputDigis.adc(outIdx)       = writeCharge;
+                                            outputDigis.rawIdArr(outIdx)  = rawIdArr;
+                                            outputDigis.moduleId(outIdx)  = moduleId;
+
+                                            alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
+            */
+                                            printf("moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+                                                   moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
+
+                                            pixelOffset++;
+                                            kkk++;
+                                        }
+                                    }
+                                }
+
+                            }
+                        }
                         alreadySplit = true;                        
                     }
                 }
@@ -398,408 +736,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 //       digiView.rawIdArr(srcIdx), digiView.moduleId(srcIdx));
             }
         }
-
-
-        template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>        
-        ALPAKA_FN_ACC void splitCluster(TAcc const& acc,
-                                        //TrackingRecHitSoAConstView<TrackerTraits> hitView,
-                                        SiPixelDigisSoAConstView digiView,
-                                        SiPixelClustersSoAConstView clusterView,
-                                        uint32_t clusterIdx,
-                                        uint16_t moduleId,
-                                        uint32_t clusterOffset,  
-                                        float jetPx, float jetPy, float jetPz,
-                                        ClusterGeometrysSoAView geoclusterView,
-                                        double chargeFracMin_,
-                                        float expSizeXAtLorentzAngleIncidence_,
-                                        float expSizeXDeltaPerTanAlpha_,
-                                        float expSizeYAtNormalIncidence_,
-                                        double centralMIPCharge_,
-                                        double chargePerUnit_,
-                                        double fractionalWidth_,
-                                        SiPixelDigisSoAView& outputDigis,
-                                        SiPixelClustersSoAView& outputClusters,
-                                        //clusterProperties* clusterPropertiesDevice,
-                                        uint32_t* clusterCounterDevice,
-                                        uint32_t* pixelCounterDevice,                                        
-                                        double forceXError_,
-                                        double forceYError_,
-                                        bool verbose_,
-                                        uint32_t ClusterCharge,
-                                        uint32_t pixelCounter,
-                                        uint32_t begin,
-                                        uint32_t end) const {
-
-            ///if (verbose_) printf("This cluster: %u now processed in SplitCluster routine\n",clusterIdx);
-
-            // Local variables
-            uint16_t pixelX_cache[maxPixels];
-            uint16_t pixelY_cache[maxPixels];
-            uint16_t pixelADC_cache[maxPixels];
-            uint16_t pixel_info[maxPixels];
-            uint32_t rawIdArr;
-
-            float clx[maxSubClusters];
-            float cly[maxSubClusters];
-            float cls[maxSubClusters];
-            float oldclx[maxSubClusters];
-            float oldcly[maxSubClusters];
-
-            uint16_t scoresIndices[maxPixels];
-            float scoresValues[maxPixels];
-
-            uint16_t clusterForPixel[extendedMaxPixels];    //this has to contain the expanded duplicated array
-            //float weightOfPixel[maxPixels];
-
-            bool split = false;
-
-            float expectedADC;
-            float expSizeX, expSizeY;
-            {
-                //float pitchX = geoclusterView.pitchX(clusterIdx);
-                float pitchY = geoclusterView.pitchY(clusterIdx);
-
-                float thickness = geoclusterView.thickness(clusterIdx);
-                float tanLorentzAngles = geoclusterView.tanLorentzAngles(clusterIdx);
-
-                // Apply precomputed transformation matrix
-                float jetDirLocalX = geoclusterView.transformXX(clusterIdx) * jetPx + geoclusterView.transformYX(clusterIdx) * jetPy + geoclusterView.transformZX(clusterIdx) * jetPz;
-                float jetDirLocalY = geoclusterView.transformXY(clusterIdx) * jetPx + geoclusterView.transformYY(clusterIdx) * jetPy + geoclusterView.transformZY(clusterIdx) * jetPz;
-                float jetDirLocalZ = geoclusterView.transformXZ(clusterIdx) * jetPx + geoclusterView.transformYZ(clusterIdx) * jetPy + geoclusterView.transformZZ(clusterIdx) * jetPz;
-
-                // Now, proceed with your calculations
-                float jetTanAlpha = jetDirLocalX / jetDirLocalZ;
-                float jetTanBeta = jetDirLocalY / jetDirLocalZ;
-                float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
-
-                expSizeX = expSizeXAtLorentzAngleIncidence_ +
-                                 std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngles));
-                expSizeY = std::sqrt((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
-                                           thickness * thickness / (pitchY * pitchY) * jetTanBeta * jetTanBeta);
-                
-                if (expSizeX < 1.f) expSizeX = 1.f;
-                if (expSizeY < 1.f) expSizeY = 1.f;
-
-                expectedADC = std::sqrt(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
- 
-                ///if (verbose_) printf("Trying to split: charge=%d expSizeX=%f expSizeY=%f\n",
-                ///        static_cast<int>(ClusterCharge), expSizeX, expSizeY);
-
-                if ( ClusterCharge > expectedADC * chargeFracMin_ &&
-                       ( geoclusterView.sizeX(clusterIdx) > expSizeX + 1 || geoclusterView.sizeY(clusterIdx) > expSizeY + 1)) {
-                    split = true;
-                }
-            }
-
-            if (split) {
-
-                // Filling local cache for faster access and sub (for avoiding repeated pixels large arrays)
-                rawIdArr = digiView.rawIdArr(begin);
-                for (uint16_t jj = begin, matchIdx = 0; jj < end && matchIdx < maxPixels; ++jj, ++matchIdx) {
-                    pixelX_cache[matchIdx] = digiView.xx(jj);
-                    pixelY_cache[matchIdx] = digiView.yy(jj);
-                    pixelADC_cache[matchIdx] = digiView.adc(jj);
-
-                    uint16_t sub = static_cast<int>(pixelADC_cache[matchIdx]) / chargePerUnit_ * expectedADC / centralMIPCharge_;
-                    if (sub < 1) sub = 1;
-                    pixel_info[matchIdx] = sub;
-                }
-
-
-                // Aligning to the original "fittingSplit" variables..
-                uint16_t sizeX = expSizeX;
-                uint16_t sizeY = expSizeY;
-                uint16_t meanExp = std::floor( ClusterCharge / expectedADC + 0.5f);
-
-
-                if (meanExp <= 1) {
-                    ///if (verbose_) printf("meanExp <= 1 writing cluster");
-                    storeOutputDigis(acc, digiView, outputDigis, begin, end, clusterCounterDevice, pixelCounterDevice);
-                }
-                else {
-                    // Splitting the pixels and writing them for the current clusterIdx
-                    ///if (verbose_) printf("cluster has meanExp=%d\n", meanExp);
-
-                    // Compute the initial values, set all distances and centers to -999
-                    ///if (verbose_) printf("Computing initial values, set all distances");
-                    for (uint16_t j = 0; j < meanExp; j++) {
-                        oldclx[j] = -999;
-                        oldcly[j] = -999;
-                        clx[j] = pixelX_cache[0]; //  digiView.xx(begin) + j;
-                        cly[j] = pixelY_cache[0];  //digiView.yy(begin) + j;
-                        cls[j] = 0;
-                    }
-                    bool stop = false;
-                    uint8_t remainingSteps = 100;
-
-                    // Refactored kernel with corrected distance scoring logic
-                    //while (!stop && remainingSteps > 0) {
-                    for (remainingSteps = 100; remainingSteps > 0 && !stop; --remainingSteps) {
-
-                        if (verbose_) printf("---------------\n");
-                        if (verbose_) printf("REMAINING STEPS : %d\n", remainingSteps);
-                        //remainingSteps--;
-
-                        for (uint16_t pixelIdx = 0; pixelIdx < pixelCounter; pixelIdx++) {
-                            if (pixelIdx < maxPixels) {
-                                float minDist = std::numeric_limits<float>::max();
-                                float secondMinDist = std::numeric_limits<float>::max();
-
-                                uint16_t j = 0;
-                                int temp_originalpixels_x = -1;
-                                int temp_originalpixels_y = -1;
-
-                                //for (uint16_t jj = begin; jj < end; ++jj) {
-                                for (uint16_t jj = 0; jj < maxPixels; ++jj) {
-                                    if (j == pixelIdx) {
-                                        temp_originalpixels_x = pixelX_cache[jj]; //digiView.xx(jj);
-                                        temp_originalpixels_y = pixelY_cache[jj]; //digiView.yy(jj);
-                                        break;
-                                    }
-                                    ++j;
-                                }
-
-                                // If not found, skip this pixelIdx
-                                if (temp_originalpixels_x == -1 || temp_originalpixels_y == -1) {
-                                    continue;
-                                }
-
-                                for (uint16_t subClusterIdx = 0; subClusterIdx < meanExp; subClusterIdx++) {
-                                    float distanceX = static_cast<float>(temp_originalpixels_x) - clx[subClusterIdx];
-                                    float distanceY = static_cast<float>(temp_originalpixels_y) - cly[subClusterIdx];
-
-                                    float distX = 0.f;
-                                    if (std::abs(distanceX) > sizeX / 2.f) {
-                                        distX = std::pow(std::abs(distanceX) - sizeX / 2.f + 1.f, 2.f);
-                                    } else {
-                                        distX = std::pow(2.f * distanceX / sizeX, 2.f);
-                                    }
-
-                                    float distY = 0.f;
-                                    if (std::abs(distanceY) > sizeY / 2.f) {
-                                        distY = std::pow(std::abs(distanceY) - sizeY / 2.f + 1.f, 2.f);
-                                    } else {
-                                        distY = std::pow(2.f * distanceY / sizeY, 2.f);
-                                    }
-
-                                    float dist = std::sqrt(distX + distY);
-
-                                    if (dist < minDist) {
-                                        secondMinDist = minDist;
-                                        minDist = dist;
-                                    } else if (dist < secondMinDist) {
-                                        secondMinDist = dist;
-                                    }
-                                }
-
-                                // Score is based on -secondMinDist
-                                scoresIndices[pixelIdx] = pixelIdx;
-                                scoresValues[pixelIdx] = -secondMinDist;
-                            }
-                        }
-
-                        // SORT SCORES ------------------------------------
-                        for (uint16_t i = 0; i < pixelCounter - 1; i++) {
-                            for (uint16_t j = 0; j < pixelCounter - i - 1; j++) {
-                                if (scoresValues[j] > scoresValues[j + 1]) { // ascending order
-                                    std::swap(scoresValues[j], scoresValues[j + 1]);
-                                    std::swap(scoresIndices[j], scoresIndices[j + 1]);
-                                }
-                            }
-                        }
-
-                        if (verbose_) {
-                            printf("Scores:\n");
-                            for (uint16_t k = 0; k < pixelCounter; k++) {
-                                printf("Score = %.5f, Index = %d\n", scoresValues[k], scoresIndices[k]);
-                            }
-                        }
-
-                        // Iterating over Scores Indices and Values
-                        for (uint16_t i = 0; i < pixelCounter && i < maxPixels; ++i) {
-                            uint16_t pixel_index = scoresIndices[i];
-                            int subpixel_counter=-1;
-
-                            for (uint16_t i = 0; i < pixelCounter && i < maxPixels; ++i) {
-
-                                // Subpixel "simulation"
-                                uint16_t sub = pixel_info[i];
-                                uint16_t adc = pixelADC_cache[i];
-                                uint16_t perDiv = adc / sub;
-
-                                for (uint16_t k = 0; k < sub; ++k) {
-
-                                    subpixel_counter++;
-
-                                    if (subpixel_counter >= extendedMaxPixels) {
-                                        printf("extendedMaxPixels is %u not enough to accomodate pixels", extendedMaxPixels);
-                                        return;
-                                    }
-
-                                    if (i > static_cast<uint32_t>(pixel_index)) break;
-                                    if (i != static_cast<uint32_t>(pixel_index)) continue;
-
-                                    float maxEst = 0.f;
-                                    int cl = -1;
-
-                                    float temp_x = pixelX_cache[i];
-                                    float temp_y = pixelY_cache[i];
-
-                                    for (uint16_t subcluster_index = 0; subcluster_index < meanExp && subcluster_index < maxSubClusters; ++subcluster_index) {
-                                        float cx = clx[subcluster_index];
-                                        float cy = cly[subcluster_index];
-                                        float clusterSignal = cls[subcluster_index];
-
-                                        float dx = temp_x - cx;
-                                        float dy = temp_y - cy;
-
-                                        float dist = 0.f;
-                                        float absX = std::abs(dx), absY = std::abs(dy);
-
-                                        if (absX > sizeX / 2.f)
-                                            dist += (absX - sizeX / 2.f + 1.f) * (absX - sizeX / 2.f + 1.f);
-                                        else
-                                            dist += (2.f * dx / sizeX) * (2.f * dx / sizeX);
-
-                                        if (absY > sizeY / 2.f)
-                                            dist += (absY - sizeY / 2.f + 1.f) * (absY - sizeY / 2.f + 1.f);
-                                        else
-                                            dist += (2.f * dy / sizeY) * (2.f * dy / sizeY);
-
-                                        float distance = std::sqrt(dist);
-                                        float nsig = (clusterSignal - expectedADC) / (expectedADC * fractionalWidth_);
-                                        float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f;
-                                        float clDest = 1.f / (distance + 0.05f);
-                                        float est = clQest * clDest;
-
-                                        if (est > maxEst) {
-                                            cl = subcluster_index;
-                                            maxEst = est;
-                                        }
-                                    }
-
-                                    uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
-                                    cls[cl] += charge;
-                                    clusterForPixel[subpixel_counter] = cl;
-                                }
-                            }
-                        }
-
-
-
-                        // Recompute cluster centers
-                        if (verbose_) printf("Recomputing cluster centers.........\n");
-
-                        stop = true;
-                        for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                            if (std::abs(clx[subcluster_index] - oldclx[subcluster_index]) > 0.01f)
-                                stop = false; // still moving
-                            if (std::abs(cly[subcluster_index] - oldcly[subcluster_index]) > 0.01f)
-                                stop = false;
-                            oldclx[subcluster_index] = clx[subcluster_index];
-                            oldcly[subcluster_index] = cly[subcluster_index];
-                            clx[subcluster_index] = 0;
-                            cly[subcluster_index] = 0;
-                            cls[subcluster_index] = 1e-38f;//1e-99;
-                        }
-
-                        int nnn = 0 ;
-                        for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
-
-                            uint16_t x = pixelX_cache[i];
-                            uint16_t y = pixelY_cache[i];                                
-
-                            // Subpixel "simulation"
-                            uint16_t sub = pixel_info[i];
-                            uint16_t adc = pixelADC_cache[i];
-                            uint16_t perDiv = adc / sub;
-
-                            for (uint16_t k = 0; k < sub; k++) {
-                                uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
-
-                                clx[ clusterForPixel[nnn] ] += x * charge;
-                                cly[ clusterForPixel[nnn] ] += y * charge;
-                                cls[ clusterForPixel[nnn] ] += charge;
-                                nnn++;
-
-                                if (nnn >= extendedMaxPixels) {
-                                    printf("extendedMaxPixels is %u not enough to accomodate pixels", extendedMaxPixels);
-                                    return;
-                                }
-                            }
-                        }
-
-
-                        for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
-                            if (cls[subcluster_index] != 0) {
-                                clx[subcluster_index] /= cls[subcluster_index];
-                                cly[subcluster_index] /= cls[subcluster_index];
-                            }
-                            if (verbose_) printf("Center for cluster, clx[%u]=%f cly[%u]=%f\n",subcluster_index, clx[subcluster_index], subcluster_index, cly[subcluster_index]);
-                            cls[subcluster_index] = 0;
-                        }
-
-                    }
-
-                    //storeOutputDigis
-                    uint32_t kkk = 0;
-                    for (uint16_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
-
-                        uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
-                        uint32_t pixelStartWritingAt = alpaka::atomicAdd(acc, pixelCounterDevice, 0u);
-                        uint32_t pixelOffset = 0;
-
-                        int nnn = 0;
-
-                        for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
-
-                            uint16_t x = pixelX_cache[i];
-                            uint16_t y = pixelY_cache[i];                                
-
-                            uint16_t sub = pixel_info[i];
-                            uint16_t adc = pixelADC_cache[i];
-                            uint16_t perDiv = adc / sub;
-
-                            uint32_t writeCharge = 0;
-
-                            for (uint16_t k = 0; k < sub; k++, nnn++) {
-                                if (clusterForPixel[nnn] == cl) {
-                                    uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
-                                    writeCharge += charge;
-                                }
-                            }
-
-                            // Only write if this pixel contributed subpixels to cluster cl
-                            if (writeCharge > 0) {
-                                uint32_t outIdx = pixelStartWritingAt + pixelOffset;
-
-
-                                if (outIdx >= static_cast<uint32_t>(outputDigis.metadata().size() ) ) {
-                                    printf("WARNING: Attempting to write beyond outputDigis capacity! outIdx=%u size=%u\n",
-                                           outIdx, outputDigis.metadata().size());
-                                    return;  // or continue, or handle however is appropriate
-                                }
-                                outputDigis.clus(outIdx)      = clusterIndex;
-                                outputDigis.xx(outIdx)        = x;
-                                outputDigis.yy(outIdx)        = y;
-                                outputDigis.adc(outIdx)       = writeCharge;
-                                outputDigis.rawIdArr(outIdx)  = rawIdArr;
-                                outputDigis.moduleId(outIdx)  = moduleId;
-                                alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
-
-
-                                //printf("NSplit %u cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
-                                //       kkk, cl, rawIdArr, i, x, i, y, writeCharge);
-
-                                pixelOffset++;
-                                kkk++;
-                            }
-                        }
-                    }
-
-                }
-            }
-        }
     };
 
 
@@ -833,22 +769,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     Queue& queue) {
 
     // Get the number of items per block (threads per block)
-    uint32_t threadsPerBlock = 128;
-
-    if (maxPixelsRetrieved <= 64)
-        threadsPerBlock = 128;
-    else if (maxPixelsRetrieved <= 128)
-        threadsPerBlock = 64;
-    else
-        threadsPerBlock = 32;
-
+    const uint32_t threadsPerBlock = 128;
 
     // Calculate how many groups (blocks) you need for each view
     const uint32_t numBlocks = (geoclusterView.metadata().size() + threadsPerBlock - 1) / threadsPerBlock;
   
-    const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
+    //const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
     //const auto MyworkDiv = make_workdiv<Acc1D>(1, 1);
-    //const auto MyworkDiv = debugMode ? make_workdiv<Acc1D>(1, 1) : make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
+    const auto MyworkDiv = debugMode ? make_workdiv<Acc1D>(1, 1) : make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
 
     ///if (verbose_) std::cout << "\nGot candidateView.metadata().size()=" << candidateView.metadata().size(); 
     ///if (verbose_) std::cout << "\nGot geoclusterView.metadata().size()=" << geoclusterView.metadata().size()
@@ -858,11 +786,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     ///                      << " threads in total" << std::endl;
 
 
-    if (verbose_) std::cout << "In the kernel... " << std::endl;
-
-    //std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
-
+    ///if (verbose_) std::cout << "In the kernel... " << std::endl;
     //std::cout << "MaxPixelRetrieved " << maxPixelsRetrieved << std::endl;
+    // std::cout << "Launching kernel with " << groups << " blocks and " << items << " threads per block." << std::endl;
 
     if (maxPixelsRetrieved<16) {
                 alpaka::exec<Acc1D>(queue, 
@@ -976,10 +902,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
                                     verbose_, debugMode, targetDetId, targetClusterOffset);
             }
-    else if (maxPixelsRetrieved<256) {
+    else if (maxPixelsRetrieved<512) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 256>{},
+                                    JetSplit<TrackerTraits, 512>{},
                                     //hitView, 
                                     digiView, 
                                     clusterView, 
@@ -1009,8 +935,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         }
 
     }
-
-
     // Explicit template instantiation for Phase 1
     template void runKernels<pixelTopology::Phase1>(//TrackingRecHitSoAView<pixelTopology::Phase1>& hitView,
                                                     SiPixelDigisSoAView& digiView,

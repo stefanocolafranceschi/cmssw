@@ -18,9 +18,9 @@
 
 #include <alpaka/alpaka.hpp>
 
-constexpr int maxSubClusters = 50;      // Max number of resulting clusters after the split (per cluster)
-//constexpr int maxPixels = 500;          // Max number of pixel per cluster in the original event
-constexpr int extendedMaxPixels = 500;  // 1900Extended number of pixel needed to run the algorithm
+constexpr int maxSubClusters = 50;        // Max number of resulting clusters after the split (per cluster)
+//constexpr int maxPixels = 500;          // Max number of pixel per cluster in the original event (now templated)
+constexpr int extendedMaxPixels = 5800;   // 5800Extended number of pixel needed to run the algorithm
 
 constexpr bool verbose = false;
 
@@ -52,7 +52,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
                   float vertexX, float vertexY, float vertexZ, float vertexEta, float vertexPhi,
                   bool verbose_, bool debugMode, int targetDetId, uint16_t targetClusterOffset,
                   uint16_t maxPixelsRetrieved, 
-                 // int runningEvent,
+                  //int runningEvent,
                   Queue& queue);
 
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting

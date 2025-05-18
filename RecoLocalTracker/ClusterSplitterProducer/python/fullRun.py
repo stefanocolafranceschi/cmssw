@@ -75,9 +75,9 @@ process.trial = cms.EDProducer(
     geometryInput=cms.InputTag("candidateDataSoA"),
     verbose=cms.bool(False),
     debugMode = cms.bool(False),             #is True, only one cluster will be analyzed
-    targetDetId = cms.int32(303079440),
-    targetClusterOffset = cms.int32(5),
-    targetEvent = cms.int32(1),    
+    targetDetId = cms.int32(303050772),
+    targetClusterOffset = cms.int32(0),
+    targetEvent = cms.int32(835),    
     vertices = cms.InputTag('offlinePrimaryVertices'),
     maxPixels = cms.InputTag('candidateDataSoA')
 )
