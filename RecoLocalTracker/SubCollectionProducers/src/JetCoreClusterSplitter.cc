@@ -140,7 +140,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
 
   Handle<edmNew::DetSetVector<SiPixelCluster>> inputPixelClusters;
   iEvent.getByToken(pixelClusters_, inputPixelClusters);
-    if (iEvent.id().event() !=835) return;
+  //if (iEvent.id().event() !=835) return;
 
   Handle<std::vector<reco::Vertex>> vertices;
   iEvent.getByToken(vertices_, vertices);
@@ -181,7 +181,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
 
             LocalVector jetDirLocal = det->surface().toLocal(jetDir);
             float jetTanAlpha = jetDirLocal.x() / jetDirLocal.z();
-            std::cout << "jetDirLocal.z() = " << jetDirLocal.z() << std::endl;
+            //std::cout << "jetDirLocal.z() = " << jetDirLocal.z() << std::endl;
             
             return;
             float jetTanBeta = jetDirLocal.y() / jetDirLocal.z();
@@ -340,9 +340,9 @@ int aaa=0;
       sub = 1;
     int perDiv = originalpixels[j].adc / sub;
 
-      std::cout << "Splitting  " << j << "  in [ " << pixels.size() << " , " << pixels.size() + sub
-                << " ], expected numb of clusters: " << meanExp << " original pixel (x,y) " << originalpixels[j].x
-                << " " << originalpixels[j].y << " sub " << sub << std::endl;
+      //std::cout << "Splitting  " << j << "  in [ " << pixels.size() << " , " << pixels.size() + sub
+      //          << " ], expected numb of clusters: " << meanExp << " original pixel (x,y) " << originalpixels[j].x
+      //          << " " << originalpixels[j].y << " sub " << sub << std::endl;
     for (int k = 0; k < sub; k++) {
       if (k == sub - 1)
         perDiv = originalpixels[j].adc - perDiv * k;
@@ -350,8 +350,8 @@ int aaa=0;
 aaa++;
     }
   }
-std::cout << "Starting with " << originalpixels.size() << " pixels " << std::endl;
-std::cout << "Expecting " << aaa << " pixels " << std::endl;
+//std::cout << "Starting with " << originalpixels.size() << " pixels " << std::endl;
+//std::cout << "Expecting " << aaa << " pixels " << std::endl;
 
   std::vector<int> clusterForPixel(pixels.size());
   // initial values
@@ -392,8 +392,8 @@ std::cout << "Expecting " << aaa << " pixels " << std::endl;
           dist += 1.f * (2.f * distanceMapY[j][i] / sizeY) * (2.f * distanceMapY[j][i] / sizeY);
         }
         distanceMap[j][i] = sqrt(dist);
-          std::cout << "Cluster " << i << " Original Pixel " << j << " distances: " << distanceMapX[j][i] << " "
-                    << distanceMapY[j][i] << " " << distanceMap[j][i] << std::endl;
+       ////   std::cout << "Cluster " << i << " Original Pixel " << j << " distances: " << distanceMapX[j][i] << " "
+       ////             << distanceMapY[j][i] << " " << distanceMap[j][i] << std::endl;
       }
     }
     // Compute scores for sequential addition. The first index is the
@@ -537,9 +537,8 @@ int kkk=0;
       SiPixelCluster::PixelPos newpix(pixelsForCl[cl][j].x, pixelsForCl[cl][j].y);
 
 
-
-                                printf("OSplit cl=%d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
-                                       cl, j, pixelsForCl[cl][j].x, j, pixelsForCl[cl][j].x, pixelsForCl[cl][j].adc);
+      //printf("OSplit cl=%d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+      //       cl, j, pixelsForCl[cl][j].x, j, pixelsForCl[cl][j].x, pixelsForCl[cl][j].adc);
 
 
       if (verbose)
