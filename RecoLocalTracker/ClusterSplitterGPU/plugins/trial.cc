@@ -191,7 +191,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
     // Retrieve the value of maxPixels
     const uint16_t maxPixelsRetrieved = deviceEvent.get(maxPixelsToken_);
 
-    //if (deviceEvent.id().event() !=835) return;
+    //if (deviceEvent.id().event() !=25) return;
 
     //if (verbose_) std::cout << "Entering in produce method.. testing" << std::endl;
 
@@ -345,7 +345,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             //clusterPropertiesDevice.data(), 
             clusterCounterDevice.data(),
             pixelCounterDevice.data(),
-            forceXError_, forceYError_, 
+            //forceXError_, forceYError_, 
             vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
             verbose_, debugMode, targetDetId, targetClusterOffset, maxPixelsRetrieved, queue);
 
