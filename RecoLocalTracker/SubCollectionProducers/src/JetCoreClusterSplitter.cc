@@ -166,6 +166,13 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
     }
     for (auto cluster = detset.begin(); cluster != detset.end(); cluster++) {
       const SiPixelCluster& aCluster = *cluster;
+
+
+std::vector<SiPixelCluster::Pixel> myoriginalpixels = aCluster.pixels();
+
+int mypix = myoriginalpixels.size();
+
+      std::cout << "JET this cluster has " << mypix << " pixels " << std::endl;
       bool hasBeenSplit = false;
       bool shouldBeSplit = false;
       GlobalPoint cPos =

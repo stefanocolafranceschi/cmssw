@@ -28,7 +28,7 @@ clusterSplitterGPU = cms.EDProducer("trial",
     targetClusterOffset = cms.int32(2),
     targetEvent = cms.int32(1),
     vertices = cms.InputTag("offlinePrimaryVertices"),
-    maxPixels = cms.InputTag("candidateDataSoA")
+    clusterPixelCounts = cms.InputTag("candidateDataSoA")
 )
 
 clusterSplitterGPUTask = cms.Task(clusterSplitterGPU)

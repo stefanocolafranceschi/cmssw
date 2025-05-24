@@ -11,7 +11,7 @@ def customize_step3(process):
         candidateInput = cms.InputTag("candidateDataSoA"),
         geometryInput = cms.InputTag("candidateDataSoA"),
         siPixelDigis = cms.InputTag("candidateDataSoA"),
-        maxPixels = cms.InputTag("candidateDataSoA")
+        clusterPixelCounts = cms.InputTag("candidateDataSoA")
     )
 
     if not hasattr(process, "clusterSplitterSequence"):

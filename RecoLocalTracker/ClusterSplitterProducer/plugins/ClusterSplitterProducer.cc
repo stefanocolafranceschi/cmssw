@@ -24,6 +24,7 @@
 #include "TFile.h"
 #include "TString.h"
 #include <vector>
+#include <utility>
 #include <tuple>
 #include <cstdlib>
 #include <unistd.h>
@@ -127,8 +128,8 @@ private:
   const device::EDPutToken<CandidatesSoACollection> CandidatesSoACollection_;
   const device::EDPutToken<ClusterGeometrysSoACollection> ClusterGeometrysSoACollection_;
   const device::EDPutToken<SiPixelDigisSoACollection> SiPixelDigisSoACollection_;
-  const edm::EDPutTokenT<uint32_t> maxPixelsToken_;
-
+  const edm::EDPutTokenT<std::vector<uint32_t>> clusterIndicesToken_;
+  const edm::EDPutTokenT<std::vector<uint32_t>> pixelCountsToken_;
 
   //const device::EDPutToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> SiPixelDigisSoACollection_;
 
@@ -152,12 +153,8 @@ HelperSplitter::HelperSplitter(edm::ParameterSet const& iConfig)
       CandidatesSoACollection_{produces()},
       ClusterGeometrysSoACollection_{produces()},    
       SiPixelDigisSoACollection_{produces()},
-      maxPixelsToken_{produces()}
-
-      
+      pixelCountsToken_{produces()}
 {}
-
-
 
 HelperSplitter::~HelperSplitter() {
 }
@@ -258,9 +255,11 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
 
     size_t clusterIndex = 0;
     size_t pixelIdx = 0;
-    size_t maxPixelsInACluster = 0;
+    //size_t maxPixelsInACluster = 0;
 
     std::unordered_map<uint32_t, size_t> moduleStartPixelIdx;
+    std::vector<uint32_t> pixelCounts;
+    //std::vector<std::pair<uint32_t, uint32_t>> clusterPixelCounts;  // (clusterIndex, pixelCount)
 
     for (auto detIt = PixelClusters.begin(); detIt != PixelClusters.end(); ++detIt) {
         const edmNew::DetSet<SiPixelCluster>& detset = *detIt;
@@ -294,17 +293,22 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
         }
 
         int localClusterIdx = 0;
+
         for (const auto& cluster : detset) {
             const SiPixelCluster& aCluster = cluster;
             std::vector<SiPixelCluster::Pixel> originalpixels = aCluster.pixels();
 
             uint32_t pixelStart = pixelIdx;
             uint32_t pixelCount = originalpixels.size();
+            //std::cout << "PRODUCER This cluster " << localClusterIdx << " has " << pixelCount << std::endl;
+            //clusterIndices.push_back(clusterIndex);     // or whatever global cluster index
+            //pixelCounts.push_back(pixelCount);
+            pixelCounts.emplace_back(pixelCount);
 
             // Update max if this cluster is larger
-            if (pixelCount > maxPixelsInACluster) {
-                maxPixelsInACluster = pixelCount;
-            }
+            //if (pixelCount > maxPixelsInACluster) {
+            //    maxPixelsInACluster = pixelCount;
+            //}
 
             geoclusterView.moduleId(clusterIndex) = moduleId;
             geoclusterView.clusterOffset(clusterIndex) = localClusterIdx;
@@ -376,8 +380,11 @@ void HelperSplitter::produce(edm::StreamID sid, device::Event& iEvent, device::E
     iEvent.emplace(ClusterGeometrysSoACollection_, std::move(tkClusterGeometryDevice));
     iEvent.emplace(SiPixelDigisSoACollection_, std::move(tkDigiDevice));
 
-    uint32_t maxPixels = maxPixelsInACluster;
-    iEvent.emplace(maxPixelsToken_, std::move(maxPixels));
+    //uint32_t maxPixels = maxPixelsInACluster;
+    //std::cout << "MaxPixel in a cluster is " << maxPixels << std::endl;
+
+    iEvent.emplace(pixelCountsToken_, std::move(pixelCounts));
+
 }
 
 void HelperSplitter::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {

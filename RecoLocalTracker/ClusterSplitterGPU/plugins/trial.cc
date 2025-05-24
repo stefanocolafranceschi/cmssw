@@ -129,7 +129,9 @@ private:
   uint16_t targetClusterOffset;
   int targetEvent;
   edm::EDGetTokenT<reco::VertexCollection> vertices_;
-  edm::EDGetTokenT<uint32_t> maxPixelsToken_;
+  //edm::EDGetTokenT<uint32_t> maxPixelsToken_;
+  //edm::EDGetTokenT<std::vector<std::pair<uint32_t, uint32_t>>> clusterPixelCountsToken_;
+  edm::EDGetTokenT<std::vector<uint32_t>> clusterPixelCountsToken_;
   const device::EDPutToken<ALPAKA_ACCELERATOR_NAMESPACE::SiPixelDigisSoACollection> outputdigisToken_;
   std::vector<Device> devices_;  
 };
@@ -164,7 +166,9 @@ trial::trial(edm::ParameterSet const& iConfig)
       targetClusterOffset(iConfig.getParameter<int>("targetClusterOffset")),
       targetEvent(iConfig.getParameter<int>("targetEvent")),
       vertices_(consumes<reco::VertexCollection>(iConfig.getParameter<edm::InputTag>("vertices"))),
-      maxPixelsToken_(consumes<uint32_t>(iConfig.getParameter<edm::InputTag>("maxPixels"))),
+      //maxPixelsToken_(consumes<uint32_t>(iConfig.getParameter<edm::InputTag>("maxPixels"))),
+      clusterPixelCountsToken_(consumes<std::vector<uint32_t>>(iConfig.getParameter<edm::InputTag>("clusterPixelCounts"))),
+
       outputdigisToken_{produces()}
       {
           devices_ = cms::alpakatools::devices<alpaka::PlatformCudaRt>();
@@ -189,7 +193,12 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
 
 
     // Retrieve the value of maxPixels
-    const uint16_t maxPixelsRetrieved = deviceEvent.get(maxPixelsToken_);
+    auto const& clusterPixelCounts = deviceEvent.get(clusterPixelCountsToken_);
+
+    //for (size_t i = 0; i < clusterPixelCounts.size(); ++i) {
+    //  printf("Pixel count at index %zu: %u\n", i, clusterPixelCounts[i]);
+    //}
+
 
     //if (deviceEvent.id().event() !=25) return;
 
@@ -333,21 +342,74 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         alpaka::memset(queue, pixelCounterDevice, 0);
 
         alpaka::wait(queue);  // Ensure the transfer is complete
-        // Execute the kernel
-        ///if (verbose_) std::cout << "About to start the kernel" << std::endl;
-        Splitting::runKernels<pixelTopology::Phase1>(
-            ////tkHit.view(), 
-            tkDigi.view(), tkClusters.view(), tkCandidates.view(), 
-            tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_, 
-            expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_, 
-            centralMIPCharge_, chargePerUnit_, fractionalWidth_, 
-            tkOutputDigis.view(), tkOutputClusters.view(), 
-            //clusterPropertiesDevice.data(), 
-            clusterCounterDevice.data(),
-            pixelCounterDevice.data(),
-            //forceXError_, forceYError_, 
-            vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
-            verbose_, debugMode, targetDetId, targetClusterOffset, maxPixelsRetrieved, queue);
+
+
+        std::vector<uint16_t> smallClusters;
+        std::vector<uint16_t> mediumClusters;
+        std::vector<uint16_t> largeClusters;
+
+        uint16_t pixelLowThreshold = 15;
+        uint16_t pixelMediumThreshold = 31;
+        uint16_t pixelLargeThreshold = 255; // This may be optional depending on use
+
+        for (size_t clusterID = 0; clusterID < clusterPixelCounts.size(); ++clusterID) {
+            uint32_t pixelCount = clusterPixelCounts[clusterID];
+
+            if (pixelCount <= pixelLowThreshold) {
+                smallClusters.push_back(clusterID);
+            }
+            else if (pixelCount <= pixelMediumThreshold) {
+                mediumClusters.push_back(clusterID);
+            }
+            else {
+                largeClusters.push_back(clusterID);
+            }
+        }
+
+        if (!smallClusters.empty()) {
+
+            Splitting::runKernels<pixelTopology::Phase1>(
+                  tkDigi.view(), tkClusters.view(), tkCandidates.view(),
+                  tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
+                  centralMIPCharge_, chargePerUnit_, fractionalWidth_,
+                  tkOutputDigis.view(), tkOutputClusters.view(),
+                  clusterCounterDevice.data(), pixelCounterDevice.data(),
+                  vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
+                  verbose_, debugMode, targetDetId, targetClusterOffset,
+                  smallClusters.data(), smallClusters.size(), pixelLowThreshold, queue);
+        }
+
+        
+
+        // Single call for medium clusters
+        if (!mediumClusters.empty()) {
+            Splitting::runKernels<pixelTopology::Phase1>(
+                  tkDigi.view(), tkClusters.view(), tkCandidates.view(),
+                  tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
+                  centralMIPCharge_, chargePerUnit_, fractionalWidth_,
+                  tkOutputDigis.view(), tkOutputClusters.view(),
+                  clusterCounterDevice.data(), pixelCounterDevice.data(),
+                  vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
+                  verbose_, debugMode, targetDetId, targetClusterOffset,
+                  mediumClusters.data(), mediumClusters.size(), pixelMediumThreshold, queue);
+        }
+
+
+        // Single call for large clusters
+        if (!largeClusters.empty()) {
+            Splitting::runKernels<pixelTopology::Phase1>(
+                  tkDigi.view(), tkClusters.view(), tkCandidates.view(),
+                  tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
+                  centralMIPCharge_, chargePerUnit_, fractionalWidth_,
+                  tkOutputDigis.view(), tkOutputClusters.view(),
+                  clusterCounterDevice.data(), pixelCounterDevice.data(),
+                  vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
+                  verbose_, debugMode, targetDetId, targetClusterOffset,
+                  largeClusters.data(), largeClusters.size(), pixelLargeThreshold, queue);
+        }
 
 
         // Update from device to host
@@ -398,7 +460,7 @@ void trial::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     desc.add<int>("targetClusterOffset");
     desc.add<int>("targetEvent");    
     desc.add<edm::InputTag>("vertices", edm::InputTag("offlinePrimaryVertices"));    
-    desc.add<edm::InputTag>("maxPixels", edm::InputTag("maxPixels"));    
+    desc.add<edm::InputTag>("clusterPixelCounts", edm::InputTag("clusterPixelCounts"));    
     descriptions.add("trial", desc);
 }
 
