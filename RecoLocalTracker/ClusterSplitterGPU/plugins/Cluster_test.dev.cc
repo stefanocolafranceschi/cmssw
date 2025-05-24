@@ -60,7 +60,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     template <typename TrackerTraits>
     void runKernels(//TrackingRecHitSoAView<TrackerTraits>& hitView,
                     SiPixelDigisSoAView& digiView,
-                    SiPixelClustersSoAView& clusterView,
+                    //SiPixelClustersSoAView& clusterView,
                     CandidatesSoAView& candidateView,
                     ClusterGeometrysSoAView& geoclusterView,
                     double ptMin_,
@@ -73,7 +73,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     double chargePerUnit_,
                     double fractionalWidth_,
                     SiPixelDigisSoAView& outputDigis,                    
-                    SiPixelClustersSoAView& outputClusters,
+                    //SiPixelClustersSoAView& outputClusters,
                     //clusterProperties* clusterPropertiesDevice,
                     uint32_t* clusterCounterDevice,
                     uint32_t* pixelCounterDevice,                    
@@ -88,12 +88,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                     Queue& queue) {
 
     // debugging printout
-    std::cout << "Running kernel on " << numClustersToRun << " clusters (maxPixels = " << maxPixels << ")\n";
-    std::cout << "Cluster indices to process: ";
-    for (uint16_t i = 0; i < numClustersToRun; ++i) {
-        std::cout << workOnMe[i] << " ";
-    }
-    std::cout << std::endl;
+    //std::cout << "Running kernel on " << numClustersToRun << " clusters (maxPixels = " << maxPixels << ")\n";
+    //std::cout << "Cluster indices to process: ";
+    //for (uint16_t i = 0; i < numClustersToRun; ++i) {
+    //    std::cout << workOnMe[i] << " ";
+    //}
+    //std::cout << std::endl;
 
     auto workOnMeHost = cms::alpakatools::make_host_buffer<uint16_t[]>(numClustersToRun);
     std::copy(workOnMe, workOnMe + numClustersToRun, alpaka::getPtrNative(workOnMeHost));
@@ -109,7 +109,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     if (maxPixels <= 16) {
         // Run one cluster in one thread, this launch will prioritize register memory
         // -------------------------------
-        threadsPerBlock = 128;
+        threadsPerBlock = 512;
         // Calculate how many needed blocks needed to cover all clusters
         numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
     } else {
@@ -119,9 +119,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         numBlocks = numClustersToRun;
     }
 
-    //const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
+    const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
     //const auto MyworkDiv = make_workdiv<Acc1D>(1, 1);
-    const auto MyworkDiv = debugMode ? make_workdiv<Acc1D>(1, 1) : make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
+    //const auto MyworkDiv = debugMode ? make_workdiv<Acc1D>(1, 1) : make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
 
     ///if (verbose_) std::cout << "\nGot candidateView.metadata().size()=" << candidateView.metadata().size(); 
     ///if (verbose_) std::cout << "\nGot geoclusterView.metadata().size()=" << geoclusterView.metadata().size()
@@ -131,15 +131,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     ///                      << " threads in total" << std::endl;
 
     //std::cout << "Launching kernel with " << numBlocks << " blocks and " << threadsPerBlock << " threads per block." << std::endl;
-
-
-    if (maxPixels < 16) {
+    if (maxPixels < 4) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplitRegister<TrackerTraits, 16>{},
+                                    JetSplitRegister<TrackerTraits, 4, 5, 100>{},
                                     //hitView, 
                                     digiView, 
-                                    clusterView, 
+                                    //clusterView, 
                                     candidateView, 
                                     geoclusterView,
                                     ptMin_,
@@ -152,7 +150,67 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     chargePerUnit_,
                                     fractionalWidth_,
                                     outputDigis,
-                                    outputClusters,
+                                    //outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    //forceXError_,
+                                    //forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset,
+                                    alpaka::getPtrNative(workOnMeDevice), 
+                                    numClustersToRun);                                    
+            }
+    else if (maxPixels < 8) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplitRegister<TrackerTraits, 8, 10, 200>{},
+                                    //hitView, 
+                                    digiView, 
+                                    //clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    //outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    //forceXError_,
+                                    //forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset,
+                                    alpaka::getPtrNative(workOnMeDevice), 
+                                    numClustersToRun);                                    
+            }
+    else if (maxPixels < 16) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplitRegister<TrackerTraits, 16, 10, 2000>{},
+                                    //hitView, 
+                                    digiView, 
+                                    //clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    //outputClusters,
                                     //clusterPropertiesDevice,
                                     clusterCounterDevice,
                                     pixelCounterDevice,                                    
@@ -166,10 +224,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     else if (maxPixels<32) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 32>{},
+                                    JetSplit<TrackerTraits, 32, 50, 5000>{},
                                     //hitView, 
                                     digiView, 
-                                    clusterView, 
+                                    //clusterView, 
                                     candidateView, 
                                     geoclusterView,
                                     ptMin_,
@@ -182,7 +240,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     chargePerUnit_,
                                     fractionalWidth_,
                                     outputDigis,
-                                    outputClusters,
+                                    //outputClusters,
                                     //clusterPropertiesDevice,
                                     clusterCounterDevice,
                                     pixelCounterDevice,                                    
@@ -196,10 +254,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     else if (maxPixels<256) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 256>{},
+                                    JetSplit<TrackerTraits, 256, 50, 5800>{},
                                     //hitView, 
                                     digiView, 
-                                    clusterView, 
+                                    //clusterView, 
                                     candidateView, 
                                     geoclusterView,
                                     ptMin_,
@@ -212,7 +270,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     chargePerUnit_,
                                     fractionalWidth_,
                                     outputDigis,
-                                    outputClusters,
+                                    //outputClusters,
                                     //clusterPropertiesDevice,
                                     clusterCounterDevice,
                                     pixelCounterDevice,                                    
@@ -231,7 +289,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     // Explicit template instantiation for Phase 1
     template void runKernels<pixelTopology::Phase1>(//TrackingRecHitSoAView<pixelTopology::Phase1>& hitView,
                                                     SiPixelDigisSoAView& digiView,
-                                                    SiPixelClustersSoAView& clusterView,
+                                                    //SiPixelClustersSoAView& clusterView,
                                                     CandidatesSoAView& candidateView,
                                                     ClusterGeometrysSoAView& geoclusterView,
                                                     double ptMin_,
@@ -244,7 +302,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                     double chargePerUnit_,
                                                     double fractionalWidth_,
                                                     SiPixelDigisSoAView& outputDigis,
-                                                    SiPixelClustersSoAView& outputClusters,
+                                                    //SiPixelClustersSoAView& outputClusters,
                                                     //clusterProperties* clusterPropertiesDevice,
                                                     uint32_t* clusterCounterDevice,
                                                     uint32_t* pixelCounterDevice,                                                    
@@ -258,7 +316,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     // Explicit template instantiation for Phase 2
     template void runKernels<pixelTopology::Phase2>(//TrackingRecHitSoAView<pixelTopology::Phase2>& hitView,
                                                     SiPixelDigisSoAView& digiView,
-                                                    SiPixelClustersSoAView& clusterView,
+                                                    //SiPixelClustersSoAView& clusterView,
                                                     CandidatesSoAView& candidateView,
                                                     ClusterGeometrysSoAView& geoclusterView,
                                                     double ptMin_,
@@ -271,7 +329,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                     double chargePerUnit_,
                                                     double fractionalWidth_,
                                                     SiPixelDigisSoAView& outputDigis,
-                                                    SiPixelClustersSoAView& outputClusters,
+                                                    //SiPixelClustersSoAView& outputClusters,
                                                     //clusterProperties* clusterPropertiesDevice,
                                                     uint32_t* clusterCounterDevice, 
                                                     uint32_t* pixelCounterDevice,                                                     

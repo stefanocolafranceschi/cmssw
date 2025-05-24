@@ -18,11 +18,11 @@
 
 #include <alpaka/alpaka.hpp>
 
-constexpr uint8_t maxSubClusters_small = 50;        // Max number of resulting clusters after the split (per cluster)
-constexpr uint8_t maxSubClusters_large = 50;        // Max number of resulting clusters after the split (per cluster)
+//constexpr uint8_t maxSubClusters_small = 10;        // 10 if maxpixel=8; 20 if maxpixel=16) Max number of resulting clusters after the split (per cluster)
+//constexpr uint8_t maxSubClusters_large = 50;        // Max number of resulting clusters after the split (per cluster)
 
-constexpr uint16_t extendedMaxPixels_small = 5800;
-constexpr uint16_t extendedMaxPixels_large = 5800;
+//constexpr uint16_t extendedMaxPixels_small = 200;  // 200 if maxpixel=8  ; 2000 if maxpixel=16
+//constexpr uint16_t extendedMaxPixels_large = 5800;
 
 constexpr bool verbose = false;
 
@@ -32,7 +32,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
 
   template <typename TrackerTraits>
   void runKernels(SiPixelDigisSoAView& digis,
-                  SiPixelClustersSoAView& clusters,
+                  //SiPixelClustersSoAView& clusters,
                   CandidatesSoAView& candidates,
                   ClusterGeometrysSoAView& geoclusters,
                   double ptMin_,
@@ -45,7 +45,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::Splitting {
                   double chargePerUnit_,
                   double fractionalWidth_,
                   SiPixelDigisSoAView& outputDigis,
-                  SiPixelClustersSoAView& outputClusters,
+                  //SiPixelClustersSoAView& outputClusters,
                   //clusterProperties* clusterPropertiesDevice,
                   uint32_t* clusterCounterDevice,
                   uint32_t* pixelCounterDevice,                  

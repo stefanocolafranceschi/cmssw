@@ -186,10 +186,10 @@ trial::~trial() {
 void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::EventSetup const& iSetup) const {
 
 
-    if ((debugMode) && (deviceEvent.id().event() != static_cast<edm::EventNumber_t>(targetEvent))) {
-        std::cout << "Skipping this event" << std::endl;
-        return;
-    }
+    //if ((debugMode) && (deviceEvent.id().event() != static_cast<edm::EventNumber_t>(targetEvent))) {
+    //    std::cout << "Skipping this event" << std::endl;
+    //    return;
+    //}
 
 
     // Retrieve the value of maxPixels
@@ -267,11 +267,11 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         /* Clusters
            the SiPixelClustersSoACollection is an alias for: SiPixelClustersDevice (gpu) 
                                                              SiPixelClustersHost (cpu)  */
-        size_t nClusters = clusters.view().metadata().size()-1;
-        SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
+        //size_t nClusters = clusters.view().metadata().size()-1;
+        //SiPixelClustersSoACollection tkClusters(nClusters, queue); // It seems the above class has no topology and no Modules.. not sure why
         ///if (verbose_) std::cout << "SiPixelClustersSoACollection done " << nClusters << std::endl;
 
-        alpaka::memcpy(queue, tkClusters.buffer(), clusters.buffer());
+        //alpaka::memcpy(queue, tkClusters.buffer(), clusters.buffer());
         //alpaka::wait(queue);  // Ensure copy is finished before checking
 
 
@@ -298,8 +298,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
 
         /* SoA for the output                    */
         SiPixelDigisSoACollection tkOutputDigis(nDigis, queue);
-        SiPixelClustersSoACollection tkOutputClusters(nClusters, queue);
-        if (verbose_) std::cout << "SoA for the output done" << std::endl;
+        //SiPixelClustersSoACollection tkOutputClusters(nClusters, queue);
+        //if (verbose_) std::cout << "SoA for the output done" << std::endl;
 
         // ------------- COPY FROM HOST TO DEVICE BUFFERS -------------------------------
         // The output SoA are initialized with the input ones (in case no cluster will be split)
@@ -369,11 +369,12 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         if (!smallClusters.empty()) {
 
             Splitting::runKernels<pixelTopology::Phase1>(
-                  tkDigi.view(), tkClusters.view(), tkCandidates.view(),
-                  tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  tkDigi.view(), //tkClusters.view(), 
+                  tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
                   expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
                   centralMIPCharge_, chargePerUnit_, fractionalWidth_,
-                  tkOutputDigis.view(), tkOutputClusters.view(),
+                  tkOutputDigis.view(), 
+                  //tkOutputClusters.view(),
                   clusterCounterDevice.data(), pixelCounterDevice.data(),
                   vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
                   verbose_, debugMode, targetDetId, targetClusterOffset,
@@ -381,15 +382,16 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         }
 
         
-
+/*
         // Single call for medium clusters
         if (!mediumClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
-                  tkDigi.view(), tkClusters.view(), tkCandidates.view(),
-                  tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  tkDigi.view(), //tkClusters.view(), 
+                  tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
                   expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
                   centralMIPCharge_, chargePerUnit_, fractionalWidth_,
-                  tkOutputDigis.view(), tkOutputClusters.view(),
+                  tkOutputDigis.view(), 
+                  //tkOutputClusters.view(),
                   clusterCounterDevice.data(), pixelCounterDevice.data(),
                   vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
                   verbose_, debugMode, targetDetId, targetClusterOffset,
@@ -400,17 +402,18 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         // Single call for large clusters
         if (!largeClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
-                  tkDigi.view(), tkClusters.view(), tkCandidates.view(),
-                  tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  tkDigi.view(), //tkClusters.view(), 
+                  tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
                   expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
                   centralMIPCharge_, chargePerUnit_, fractionalWidth_,
-                  tkOutputDigis.view(), tkOutputClusters.view(),
+                  tkOutputDigis.view(), 
+                  //tkOutputClusters.view(),
                   clusterCounterDevice.data(), pixelCounterDevice.data(),
                   vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   largeClusters.data(), largeClusters.size(), pixelLargeThreshold, queue);
         }
-
+*/
 
         // Update from device to host
         //alpaka::memcpy(queue, gpuSharedHost, gpuSharedDevice);  // Copy device buffer to host buffer

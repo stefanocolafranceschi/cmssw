@@ -53,7 +53,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   using namespace cms::alpakatools;
   namespace Splitting {
 
-    template <typename TrackerTraits, uint32_t maxPixels>
+    template <typename TrackerTraits, uint32_t maxPixels, uint8_t maxSubClusters, uint16_t extendedMaxPixels>
     struct JetSplitRegister {
 
         // Main operator function
@@ -61,7 +61,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         ALPAKA_FN_ACC void operator()(TAcc const& acc,
                                       //TrackingRecHitSoAConstView<TrackerTraits> hitView,
                                       SiPixelDigisSoAView digiView,
-                                      SiPixelClustersSoAConstView clusterView,
+                                      //SiPixelClustersSoAConstView clusterView,
                                       CandidatesSoAView candidateView,
                                       ClusterGeometrysSoAView geoclusterView,
                                       double ptMin_,
@@ -74,7 +74,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       double chargePerUnit_,
                                       double fractionalWidth_,
                                       SiPixelDigisSoAView outputDigis,
-                                      SiPixelClustersSoAView outputClusters,
+                                      //SiPixelClustersSoAView outputClusters,
                                       //clusterProperties* clusterPropertiesDevice,
                                       uint32_t* clusterCounterDevice,
                                       uint32_t* pixelCounterDevice,                                      
@@ -85,15 +85,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       uint32_t numClustersToRun) const {
 
             // Get thread and grid indices
-            const auto threadIdx = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]; // Thread index within the block
+            //const auto threadIdx = alpaka::getIdx<alpaka::Block, alpaka::Threads>(acc)[0u]; // Thread index within the block
             //const auto blockIdx  = alpaka::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0u];   // Block index
             //const auto blockDim  = alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]; // Threads per block
             //const auto gridDim = alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0];
 
             const auto globalThreadIdx = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u];
 
-            constexpr uint8_t maxSubClusters = maxSubClusters_small;
-            constexpr uint16_t extendedMaxPixels = extendedMaxPixels_small;
+            //constexpr uint8_t maxSubClusters = maxSubClusters_small;
+            //constexpr uint16_t extendedMaxPixels = extendedMaxPixels_small;
 
 
             if (globalThreadIdx >= numClustersToRun) return;
@@ -125,13 +125,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             const uint32_t pixelCounter = end - begin;
             uint32_t ClusterCharge = geoclusterView.ClusterCharge(clusterIdx);
 
-            if (pixelCounter > maxPixels) return;
+            //if (pixelCounter > maxPixels) return;
 
             // NO ENOUGH SPACE ON THE TEMPORARY ARRAY
-            if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
-                // Avoid crash if the end is kinda wrong/overflown
-                return;
-            }
+            //if (static_cast<int>(begin) < 0 || static_cast<int>(end) < 0 || static_cast<int>(end) > static_cast<int>(digiView.metadata().size())) {
+            //    // Avoid crash if the end is kinda wrong/overflown
+            //    return;
+            //}
 
             // Access fine-tuned Global position (previously saved into the GeoCluster SoA)
             float x = geoclusterView.x(clusterIdx);
@@ -253,6 +253,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         uint16_t sizeY = expSizeY;
                         uint8_t meanExp = std::floor( ClusterCharge / expectedADC + 0.5f);
 
+
                         if (meanExp <= 1) {
                             ///if (verbose_) printf("meanExp <= 1 writing cluster");
                             storeOutputDigis(acc, digiView, outputDigis, begin, end, clusterCounterDevice, pixelCounterDevice);
@@ -300,8 +301,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                                 //if (verbose_) printf("---------------\n");
                                 //if (verbose_) printf("REMAINING STEPS : %d\n", remainingSteps);
-
-
 
                                 for (uint16_t pixelIdx = 0; pixelIdx < pixelCounter; pixelIdx++) {
                                     if (pixelIdx < maxPixels) {
@@ -379,12 +378,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     }
                                 }
 
-                                if (verbose_) {
-                                    printf("Cluster %u Scores:\n", clusterIdx);
-                                    for (uint16_t k = 0; k < pixelCounter; k++) {
-                                        printf("Cluster %u Score = %.5f, Index = %d\n", clusterIdx, scoresValues[k], scoresIndices[k]);
-                                    }
-                                }
+                                //if (verbose_) {
+                                //    printf("Cluster %u Scores:\n", clusterIdx);
+                                //    for (uint16_t k = 0; k < pixelCounter; k++) {
+                                //        printf("Cluster %u Score = %.5f, Index = %d\n", clusterIdx, scoresValues[k], scoresIndices[k]);
+                                //    }
+                                //}
 
 
                                 // Iterating over Scores Indices and Values
@@ -451,7 +450,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
                                             cls[cl] += charge;
                                             clusterForPixel[subpixel_counter] = cl;
-//printf("DEBUG, subpixel_counter=%u\n",subpixel_counter);
+                                            //printf("DEBUG, subpixel_counter=%u\n",subpixel_counter);                                            
                                             //printf("remainingSteps=%u GPU: pixel_index=%u k=%u -> subpixel=%u -> cl=%d "
                                             //        "charge=%u est=%.4f (maxEst=%.4f) pixel=(%.2f,%.2f) -> cl center=(%.2f,%.2f)\n",
                                             //        remainingSteps, pixel_index, k, subpixel_counter, cl,
@@ -463,13 +462,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     }
                                 }
 
-                                for (uint16_t oo = 0; oo < meanExp; oo++) {
+                                //for (uint16_t oo = 0; oo < meanExp; oo++) {
                                     //printf("remainingSteps=%u oldclx[%u]=%f oldcly[%u]=%f clx[%u]=%f cly[%u]=%f\n",remainingSteps, oo,oldclx[oo],oo,oldcly[oo],oo,clx[oo],oo,oldcly[oo]);
-                                }
+                                //}
 
 
                                 // Recompute cluster centers
-                                if (verbose_) printf("Recomputing cluster centers.........\n");
+                                //if (verbose_) printf("Recomputing cluster centers.........\n");
 
                                 blockShouldStop = true;
                                 for (uint16_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
@@ -567,11 +566,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                                         alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
         */
-                                        //if (verbose_) {
+                                        if (verbose_) {
                                             uint16_t moduleId = geoclusterView.moduleId(clusterIdx);
                                             printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
                                                candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
-                                        //}
+                                        }
                                         pixelOffset++;
                                         kkk++;
                                     }

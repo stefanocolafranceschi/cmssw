@@ -53,7 +53,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   using namespace cms::alpakatools;
   namespace Splitting {
 
-    template <typename TrackerTraits, uint32_t maxPixels>
+    template <typename TrackerTraits, uint32_t maxPixels, uint8_t maxSubClusters, uint16_t extendedMaxPixels>
     struct JetSplit {
 
         // Main operator function
@@ -61,7 +61,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         ALPAKA_FN_ACC void operator()(TAcc const& acc,
                                       //TrackingRecHitSoAConstView<TrackerTraits> hitView,
                                       SiPixelDigisSoAView digiView,
-                                      SiPixelClustersSoAConstView clusterView,
+                                      //SiPixelClustersSoAConstView clusterView,
                                       CandidatesSoAView candidateView,
                                       ClusterGeometrysSoAView geoclusterView,
                                       double ptMin_,
@@ -74,7 +74,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                       double chargePerUnit_,
                                       double fractionalWidth_,
                                       SiPixelDigisSoAView outputDigis,
-                                      SiPixelClustersSoAView outputClusters,
+                                      //SiPixelClustersSoAView outputClusters,
                                       //clusterProperties* clusterPropertiesDevice,
                                       uint32_t* clusterCounterDevice,
                                       uint32_t* pixelCounterDevice,                                      
@@ -89,15 +89,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             const auto blockDim  = alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(acc)[0u]; // Threads per block
             //const auto gridDim = alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0];
 
-            constexpr uint8_t maxSubClusters = maxSubClusters_large;
-            constexpr uint16_t extendedMaxPixels = extendedMaxPixels_large;
+            //constexpr uint8_t maxSubClusters = maxSubClusters_large;
+            //constexpr uint16_t extendedMaxPixels = extendedMaxPixels_large;
 
             // Run cooperatively one block with several threads
             // handles one cluster
 
             if (blockIdx >= numClustersToRun) return;
             const uint32_t clusterIdx = workOnMe[blockIdx];
-            printf("KernelShared; Running on blockIdx=%u threadIdx=%u clusterIdx=%u\n", blockIdx, threadIdx, clusterIdx);
+            //printf("KernelShared; Running on blockIdx=%u threadIdx=%u clusterIdx=%u\n", blockIdx, threadIdx, clusterIdx);
 
             uint16_t pixelX_cache[maxPixels];
             uint16_t pixelY_cache[maxPixels];
@@ -716,11 +716,11 @@ if (threadIdx==0) {
 
                                             alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
             */
-                                            //if (verbose_) {
+                                            if (verbose_) {
                                                 uint16_t moduleId = geoclusterView.moduleId(clusterIdx);
                                                 printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
                                                    candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
-                                            //}
+                                            }
                                             pixelOffset++;
                                             kkk++;
                                         }
