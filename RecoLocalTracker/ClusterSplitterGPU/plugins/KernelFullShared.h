@@ -54,7 +54,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   namespace Splitting {
 
     template <typename TrackerTraits, uint32_t maxPixels, uint8_t maxSubClusters, uint16_t extendedMaxPixels>
-    struct JetSplit {
+    struct JetSplitFullShared {
 
         // Main operator function
         template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>
@@ -105,8 +105,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             uint16_t pixel_info[maxPixels];
             uint8_t subpixelOffset[maxPixels];
 
-            uint8_t scoresIndices[maxPixels];
-            float scoresValues[maxPixels];
+            __attribute__((shared)) uint8_t scoresIndices[maxPixels];
+            __attribute__((shared)) float scoresValues[maxPixels];
 
             __attribute__((shared)) float clx[maxSubClusters];
             __attribute__((shared)) float cly[maxSubClusters];
@@ -355,7 +355,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 //if (verbose_) printf("---------------\n");
                                 //if (verbose_) printf("REMAINING STEPS : %d\n", remainingSteps);
 
-
+/*
                                 for (uint16_t pixelIdx = 0; pixelIdx < pixelCounter; pixelIdx++) {
                                     if (pixelIdx < maxPixels) {
                                         float minDist = std::numeric_limits<float>::max();
@@ -419,9 +419,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         scoresValues[pixelIdx] = -secondMinDist;
                                     }
                                 }
-                                
+*/                                
 
-/*
+
                                 // Reseting temporary variables
                                 for (uint16_t i = threadIdx; i < maxPixels; i += blockDim) {
                                     scoresIndices[i] = 0;
@@ -494,7 +494,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 }
                                 alpaka::syncBlockThreads(acc);                            
                                 //-----------------------------------
-*/
+
 
 
                                 // SORT SCORES ------------------------------------

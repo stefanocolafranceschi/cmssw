@@ -362,6 +362,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                 mediumClusters.push_back(clusterID);
             }
             else {
+                //std::cout << "Large cluster: " << clusterID << " with " << pixelCount << " Pixels " << std::endl;
                 largeClusters.push_back(clusterID);
             }
         }
@@ -382,7 +383,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         }
 
         
-/*
+
         // Single call for medium clusters
         if (!mediumClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
@@ -398,7 +399,6 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   mediumClusters.data(), mediumClusters.size(), pixelMediumThreshold, queue);
         }
 
-
         // Single call for large clusters
         if (!largeClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
@@ -413,7 +413,6 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   largeClusters.data(), largeClusters.size(), pixelLargeThreshold, queue);
         }
-*/
 
         // Update from device to host
         //alpaka::memcpy(queue, gpuSharedHost, gpuSharedDevice);  // Copy device buffer to host buffer
