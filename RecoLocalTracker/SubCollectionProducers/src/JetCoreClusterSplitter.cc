@@ -190,7 +190,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
             float jetTanAlpha = jetDirLocal.x() / jetDirLocal.z();
             //std::cout << "jetDirLocal.z() = " << jetDirLocal.z() << std::endl;
             
-            return;
+            
             float jetTanBeta = jetDirLocal.y() / jetDirLocal.z();
             float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
             float expSizeX = expSizeXAtLorentzAngleIncidence_ +
@@ -206,7 +206,7 @@ void JetCoreClusterSplitter::produce(edm::Event& iEvent, const edm::EventSetup& 
             if (aCluster.charge() > expCharge * chargeFracMin_ &&
                 (aCluster.sizeX() > expSizeX + 1 || aCluster.sizeY() > expSizeY + 1)) {
               shouldBeSplit = true;
-              if (verbose)
+
                 std::cout << "Trying to split: charge and deltaR " << aCluster.charge() << " "
                           << Geom::deltaR(jetDir, clusterDir) << " size x y " << aCluster.sizeX() << " "
                           << aCluster.sizeY() << " exp. size (x,y) " << expSizeX << " " << expSizeY << " detid "
@@ -449,6 +449,10 @@ for (const auto& [score, pixelIdx] : scores) {
           }
           cls[cl] += subpixel->second.adc;
           clusterForPixel[subpixel_counter] = cl;
+          printf("subpixel_counter=%u -> cl=%d \n",
+              subpixel_counter, cl);
+
+
           weightOfPixel[subpixel_counter] = maxEst;
           if (verbose)
             std::cout << "Pixel weight j cl " << weightOfPixel[subpixel_counter] << " " << subpixel_counter << " " << cl
@@ -469,23 +473,33 @@ for (const auto& [score, pixelIdx] : scores) {
       cly[subcluster_index] = 0;
       cls[subcluster_index] = 1e-99;
     }
+
+
+  for (uint16_t oo = 0; oo < meanExp; oo++) {
+      printf("remainingSteps=%u oldclx[%u]=%f oldcly[%u]=%f clx[%u]=%f cly[%u]=%f\n",remainingSteps, oo,oldclx[oo],oo,oldcly[oo],oo,clx[oo],oo,oldcly[oo]);
+  }
+
     for (unsigned int pixel_index = 0; pixel_index < pixels.size(); pixel_index++) {
       if (clusterForPixel[pixel_index] < 0)
         continue;
-      if (verbose)
-        std::cout << "j " << pixel_index << " x " << pixels[pixel_index].second.x << " * y "
-                  << pixels[pixel_index].second.y << " * ADC " << pixels[pixel_index].second.adc << " * W "
-                  << weightOfPixel[pixel_index] << std::endl;
+
+        std::cout << "DUMPj " << pixel_index << "clusterForPixel[pixel_index]= "<<clusterForPixel[pixel_index] << " x " << pixels[pixel_index].second.x << " * y "
+                  << pixels[pixel_index].second.y << " * ADC =" << pixels[pixel_index].second.adc << std::endl;
+
       clx[clusterForPixel[pixel_index]] += pixels[pixel_index].second.x * pixels[pixel_index].second.adc;
       cly[clusterForPixel[pixel_index]] += pixels[pixel_index].second.y * pixels[pixel_index].second.adc;
       cls[clusterForPixel[pixel_index]] += pixels[pixel_index].second.adc;
+
+    printf("PIXEL=%u, clx=%f cly=%f cls=%f\n",pixel_index, clx[clusterForPixel[pixel_index]], cly[clusterForPixel[pixel_index]], cls[clusterForPixel[pixel_index]]);
+
+
     }
     for (unsigned int subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
       if (cls[subcluster_index] != 0) {
         clx[subcluster_index] /= cls[subcluster_index];
         cly[subcluster_index] /= cls[subcluster_index];
       }
-      if (verbose)
+
         std::cout << "Center for cluster " << subcluster_index << " x,y " << clx[subcluster_index] << " "
                   << cly[subcluster_index] << std::endl;
       cls[subcluster_index] = 0;
@@ -527,7 +541,7 @@ for (const auto& [score, pixelIdx] : scores) {
   //>(512,std::vector<SiPixelCluster::Pixel *>(512,0)));
 int kkk=0;
   for (int cl = 0; cl < (int)meanExp; cl++) {
-    /*
+    
         for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
             kkk++;
             std::cout << " OSplit cl=" << cl
@@ -536,16 +550,17 @@ int kkk=0;
                       << " ADC=" << pixelsForCl[cl][j].adc
                       << std::endl;
         }
+        
       if (kkk>StartWith) std::cout << " OOOOPS, the output contains an extra pixel?!? " << std::endl;
-*/
+
     if (verbose)
       std::cout << "Pixels of cl " << cl << " ";
     for (unsigned int j = 0; j < pixelsForCl[cl].size(); j++) {
       SiPixelCluster::PixelPos newpix(pixelsForCl[cl][j].x, pixelsForCl[cl][j].y);
 
 
-      //printf("OSplit cl=%d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
-      //       cl, j, pixelsForCl[cl][j].x, j, pixelsForCl[cl][j].x, pixelsForCl[cl][j].adc);
+     // printf("OSplit cl=%d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+     //        cl, j, pixelsForCl[cl][j].x, j, pixelsForCl[cl][j].x, pixelsForCl[cl][j].adc);
 
 
       if (verbose)

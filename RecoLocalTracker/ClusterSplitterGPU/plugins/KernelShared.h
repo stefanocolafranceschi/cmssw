@@ -97,7 +97,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             if (blockIdx >= numClustersToRun) return;
             const uint32_t clusterIdx = workOnMe[blockIdx];
-            //printf("KernelShared; Running on blockIdx=%u threadIdx=%u clusterIdx=%u\n", blockIdx, threadIdx, clusterIdx);
+
+//printf("KernelShared; maxPixels=%u Running on blockIdx=%u threadIdx=%u clusterIdx=%u\n", maxPixels, blockIdx, threadIdx, clusterIdx);
 
             uint16_t pixelX_cache[maxPixels];
             uint16_t pixelY_cache[maxPixels];

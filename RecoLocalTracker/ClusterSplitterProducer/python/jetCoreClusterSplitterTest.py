@@ -84,7 +84,7 @@ process.source = cms.Source("PoolSource",
     #fileNames = cms.untracked.vstring('file:step3my.root')
     fileNames = cms.untracked.vstring('file:largestep3.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(999))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(2))
 
 # Output module
 process.RECOSIMoutput = cms.OutputModule("PoolOutputModule",

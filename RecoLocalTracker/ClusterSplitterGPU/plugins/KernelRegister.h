@@ -151,7 +151,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             const uint32_t numCandidates = static_cast<uint32_t>(candidateView.metadata().size());
             for (uint32_t candIdx = 0; candIdx < numCandidates; ++candIdx) {
 
-
                 //printf("Processing Cluster: %u, Candidate: %u/%u Block index: %u, Threads per block: %u, Total threads: %u\n",
                 //    clusterIdx, candIdx, numCandidates-1, blockIdx, blockDim, blockDim * alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0u]);
 
@@ -302,6 +301,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 //if (verbose_) printf("---------------\n");
                                 //if (verbose_) printf("REMAINING STEPS : %d\n", remainingSteps);
 
+                                for (uint16_t pixelIdx = 0; pixelIdx < maxPixels; pixelIdx++) {
+                                        scoresIndices[pixelIdx] = 0;
+                                        scoresValues[pixelIdx] = 0;
+                                }
+
                                 for (uint16_t pixelIdx = 0; pixelIdx < pixelCounter; pixelIdx++) {
                                     if (pixelIdx < maxPixels) {
                                         float minDist = std::numeric_limits<float>::max();
@@ -378,12 +382,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     }
                                 }
 
-                                //if (verbose_) {
-                                //    printf("Cluster %u Scores:\n", clusterIdx);
-                                //    for (uint16_t k = 0; k < pixelCounter; k++) {
-                                //        printf("Cluster %u Score = %.5f, Index = %d\n", clusterIdx, scoresValues[k], scoresIndices[k]);
-                                //    }
-                                //}
+                                if (verbose_) {
+                                    printf("Cluster %u Scores:\n", clusterIdx);
+                                    for (uint16_t k = 0; k < pixelCounter; k++) {
+                                        printf("Cluster %u Score = %.5f, Index = %d\n", clusterIdx, scoresValues[k], scoresIndices[k]);
+                                    }
+                                }
 
 
                                 // Iterating over Scores Indices and Values
@@ -395,7 +399,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     for (uint16_t i = 0; i < pixelCounter && i < maxPixels; ++i) {
   
                                         // Subpixel "simulation"
-                                        uint16_t sub = pixel_info[i];
+                                        uint8_t sub = pixel_info[i];
                                         uint16_t adc = pixelADC_cache[i];
                                         uint16_t perDiv = adc / sub;
 
@@ -450,6 +454,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
                                             cls[cl] += charge;
                                             clusterForPixel[subpixel_counter] = cl;
+
                                             //printf("DEBUG, subpixel_counter=%u\n",subpixel_counter);                                            
                                             //printf("remainingSteps=%u GPU: pixel_index=%u k=%u -> subpixel=%u -> cl=%d "
                                             //        "charge=%u est=%.4f (maxEst=%.4f) pixel=(%.2f,%.2f) -> cl center=(%.2f,%.2f)\n",
@@ -462,9 +467,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     }
                                 }
 
-                                //for (uint16_t oo = 0; oo < meanExp; oo++) {
-                                    //printf("remainingSteps=%u oldclx[%u]=%f oldcly[%u]=%f clx[%u]=%f cly[%u]=%f\n",remainingSteps, oo,oldclx[oo],oo,oldcly[oo],oo,clx[oo],oo,oldcly[oo]);
-                                //}
 
 
                                 // Recompute cluster centers
@@ -482,6 +484,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     cly[subcluster_index] = 0;
                                     cls[subcluster_index] = 1e-38f;//1e-99;
                                 }
+                                //for (uint16_t oo = 0; oo < meanExp; oo++) {
+                                //    printf("remainingSteps=%u oldclx[%u]=%f oldcly[%u]=%f clx[%u]=%f cly[%u]=%f\n",remainingSteps, oo,oldclx[oo],oo,oldcly[oo],oo,clx[oo],oo,oldcly[oo]);
+                                //}
+
 
                                 int nnn = 0 ;
                                 for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
@@ -495,14 +501,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     uint16_t perDiv = adc / sub;
 
                                     for (uint8_t k = 0; k < sub; k++) {
-                                        uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
-                                        //printf("nnn=%d x*charge=%d  y*charge=%d  clx=%f  cly=%f  cls=%f\n", nnn, x * charge, y * charge, clx[ clusterForPixel[nnn] ],cly[ clusterForPixel[nnn] ],cls[ clusterForPixel[nnn] ]);
+                                        uint32_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
+                                        //printf("DUMPj clusterForPixel[pixel_index]=%u nnn=%u x=%u  y=%u  charge=%u \n", clusterForPixel[nnn], nnn, x, y, charge);
 
                                         clx[ clusterForPixel[nnn] ] += x * charge;
                                         cly[ clusterForPixel[nnn] ] += y * charge;
                                         cls[ clusterForPixel[nnn] ] += charge;
                                         nnn++;
                                     }
+                                    //printf("PIXEL=%u, clx=%f cly=%f cls=%f\n",i, clx[ clusterForPixel[nnn]], cly[clusterForPixel[nnn]], cls[clusterForPixel[nnn]]);
+
                                 }
 
                                 for (uint8_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
@@ -517,6 +525,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             }
 
 
+            //printf("INLOOPKernelRegister; Running on cluster=%u \n", clusterIdx );
 
                             //storeOutputDigis
                             uint32_t kkk = 0;
@@ -566,20 +575,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                                         alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
         */
-                                        if (verbose_) {
+                                        //if (verbose_) {
                                             uint16_t moduleId = geoclusterView.moduleId(clusterIdx);
                                             printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
                                                candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
-                                        }
+                                        //}
                                         pixelOffset++;
                                         kkk++;
                                     }
                                 }
                             }
-                            return;
-
-                           
-
+                            
                         }
 
                     }

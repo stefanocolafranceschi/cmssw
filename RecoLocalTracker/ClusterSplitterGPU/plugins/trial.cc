@@ -340,20 +340,26 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
 
         auto pixelCounterDevice = cms::alpakatools::make_device_buffer<uint32_t>(queue);
         alpaka::memset(queue, pixelCounterDevice, 0);
-
         alpaka::wait(queue);  // Ensure the transfer is complete
 
-
+        std::vector<uint16_t> tinyClusters;
         std::vector<uint16_t> smallClusters;
         std::vector<uint16_t> mediumClusters;
         std::vector<uint16_t> largeClusters;
+        std::vector<uint16_t> heavyClusters;
 
+        uint16_t pixelTinyThreshold = 255;
         uint16_t pixelLowThreshold = 15;
         uint16_t pixelMediumThreshold = 31;
-        uint16_t pixelLargeThreshold = 255; // This may be optional depending on use
+        uint16_t pixelLargeThreshold = 127;
+        uint16_t pixelHeavyThreshold = 255;
 
         for (size_t clusterID = 0; clusterID < clusterPixelCounts.size(); ++clusterID) {
             uint32_t pixelCount = clusterPixelCounts[clusterID];
+
+            if (pixelCount <= pixelTinyThreshold) {
+                tinyClusters.push_back(clusterID);
+            }
 
             if (pixelCount <= pixelLowThreshold) {
                 smallClusters.push_back(clusterID);
@@ -361,11 +367,32 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             else if (pixelCount <= pixelMediumThreshold) {
                 mediumClusters.push_back(clusterID);
             }
-            else {
-                //std::cout << "Large cluster: " << clusterID << " with " << pixelCount << " Pixels " << std::endl;
+            else if (pixelCount <= pixelLargeThreshold) {
                 largeClusters.push_back(clusterID);
             }
+            else {
+                //std::cout << "Large cluster: " << clusterID << " with " << pixelCount << " Pixels " << std::endl;
+                heavyClusters.push_back(clusterID);
+            }
         }
+
+        if (!tinyClusters.empty()) {
+
+            Splitting::runKernels<pixelTopology::Phase1>(
+                  tkDigi.view(), //tkClusters.view(), 
+                  tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
+                  centralMIPCharge_, chargePerUnit_, fractionalWidth_,
+                  tkOutputDigis.view(), 
+                  //tkOutputClusters.view(),
+                  clusterCounterDevice.data(), pixelCounterDevice.data(),
+                  vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
+                  verbose_, debugMode, targetDetId, targetClusterOffset,
+                  tinyClusters.data(), tinyClusters.size(), pixelTinyThreshold, queue);
+        }
+        alpaka::wait(queue);  // Ensure the transfer is complete
+
+/*
 
         if (!smallClusters.empty()) {
 
@@ -381,8 +408,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   smallClusters.data(), smallClusters.size(), pixelLowThreshold, queue);
         }
+        alpaka::wait(queue);  // Ensure the transfer is complete
 
-        
 
         // Single call for medium clusters
         if (!mediumClusters.empty()) {
@@ -397,8 +424,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   mediumClusters.data(), mediumClusters.size(), pixelMediumThreshold, queue);
-        }
-
+        }        
+        alpaka::wait(queue);  // Ensure the transfer is complete
         // Single call for large clusters
         if (!largeClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
@@ -413,7 +440,23 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   largeClusters.data(), largeClusters.size(), pixelLargeThreshold, queue);
         }
+        alpaka::wait(queue);  // Ensure the transfer is complete
 
+        if (!heavyClusters.empty()) {
+            Splitting::runKernels<pixelTopology::Phase1>(
+                  tkDigi.view(), //tkClusters.view(), 
+                  tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
+                  expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
+                  centralMIPCharge_, chargePerUnit_, fractionalWidth_,
+                  tkOutputDigis.view(), 
+                  //tkOutputClusters.view(),
+                  clusterCounterDevice.data(), pixelCounterDevice.data(),
+                  vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
+                  verbose_, debugMode, targetDetId, targetClusterOffset,
+                  heavyClusters.data(), heavyClusters.size(), pixelHeavyThreshold, queue);
+        }
+        alpaka::wait(queue);  // Ensure the transfer is complete
+*/
         // Update from device to host
         //alpaka::memcpy(queue, gpuSharedHost, gpuSharedDevice);  // Copy device buffer to host buffer
         //alpaka::wait(queue);  // Ensure the transfer is complete
