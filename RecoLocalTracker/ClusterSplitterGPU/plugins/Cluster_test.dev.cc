@@ -106,7 +106,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     uint32_t threadsPerBlock;
     uint32_t numBlocks;
 
-    if (maxPixels <= 4) {
+    if (maxPixels <= 255) {
         // Run one cluster in one thread, this launch will prioritize register memory
         // -------------------------------
         threadsPerBlock = 256;    //            512, 1024 silent crash
@@ -140,10 +140,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     //std::cout << "Launching kernel with " << numBlocks << " blocks and " << threadsPerBlock << " threads per block." << std::endl;
 
-    if (maxPixels <= 4) {
+    if (maxPixels <= 255) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplitStd<TrackerTraits, 4, 8, 500>{},
+                                    JetSplitStd<TrackerTraits, 255, 255, 6000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 

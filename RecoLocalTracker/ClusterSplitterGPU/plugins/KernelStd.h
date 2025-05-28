@@ -253,13 +253,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         uint8_t meanExp = std::floor( ClusterCharge / expectedADC + 0.5f);
 
 
-                        // STAT printout
-                        int tot=0;
-                        for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
-                            tot = tot + pixel_info[i];
-                        }
-                        printf("pixelCounter=%u, meanExp=%u extendedMaxPixels=%u \n",pixelCounter, meanExp, tot ); 
-
 
                         if (meanExp <= 1) {
                             ///if (verbose_) printf("meanExp <= 1 writing cluster");
@@ -282,6 +275,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             }
                             //-----------------------------------
 
+			    // STAT printout
+                            //int tot=0;
+                            //for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
+                            //    tot = tot + pixel_info[i];
+                            //}
+                            //printf("pixelCounter=%u, meanExp=%u extendedMaxPixels=%u \n",pixelCounter, meanExp, tot );
 
 
                             // Splitting the pixels and writing them for the current clusterIdx
