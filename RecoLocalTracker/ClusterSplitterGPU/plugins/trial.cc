@@ -348,7 +348,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         std::vector<uint16_t> largeClusters;
         std::vector<uint16_t> heavyClusters;
 
-        uint16_t pixelTinyThreshold = 255;
+        uint16_t pixelTinyThreshold = 4;
         uint16_t pixelLowThreshold = 15;
         uint16_t pixelMediumThreshold = 31;
         uint16_t pixelLargeThreshold = 127;

@@ -44,8 +44,9 @@
 #include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 #include "Cluster_test.h"
-#include "KernelRegister.h"
-#include "KernelShared.h"
+#include "KernelFullRegister.h"   //no shared memory + no use of large array
+#include "KernelShared.h"         //use of shared memory per cluster
+#include "KernelStd.h"            //no shared memory, one large array needed
 
 using namespace alpaka;
 using namespace reco;
@@ -105,7 +106,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     uint32_t threadsPerBlock;
     uint32_t numBlocks;
 
-    if (maxPixels <= 255) {
+    if (maxPixels <= 4) {
         // Run one cluster in one thread, this launch will prioritize register memory
         // -------------------------------
         threadsPerBlock = 256;    //            512, 1024 silent crash
@@ -139,10 +140,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     //std::cout << "Launching kernel with " << numBlocks << " blocks and " << threadsPerBlock << " threads per block." << std::endl;
 
-    if (maxPixels < 256) {
+    if (maxPixels <= 4) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplitRegister<TrackerTraits, 256, 255, 5800>{},
+                                    JetSplitStd<TrackerTraits, 4, 8, 500>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
