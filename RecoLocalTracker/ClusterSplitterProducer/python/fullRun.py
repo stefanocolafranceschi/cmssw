@@ -132,7 +132,7 @@ process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring('file:largestep3.root')
     #fileNames = cms.untracked.vstring('file:/gpu_data/store/relval/CMSSW_15_0_0/RelValTTbar_14TeV/GEN-SIM-DIGI-RAW/PU_142X_mcRun3_2025_realistic_v7_STD_2025_PU-v3/2580000/1c2caeef-e246-4b6d-bebc-4fb6df4f9bbd.root')
 )
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(999))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(10))
 
 #process.output = cms.OutputModule("PoolOutputModule",
 #    fileName = cms.untracked.string('file:step_output.root'),

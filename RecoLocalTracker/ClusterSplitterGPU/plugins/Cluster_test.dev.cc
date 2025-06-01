@@ -44,9 +44,13 @@
 #include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 #include "Cluster_test.h"
-#include "KernelFullRegister.h"   //no shared memory + no use of large array
-#include "KernelShared.h"         //use of shared memory per cluster
-#include "KernelStd.h"            //no shared memory, one large array needed
+#include "KernelFullRegister.h"       //no shared memory + no use of large array
+#include "KernelRegister.h"           //no shared memory + one large array (spilled in global)
+#include "KernelShared.h"             //use of some shared memory per cluster
+#include "KernelFullShared.h"         //use of no plenty of shared memory per cluster
+#include "KernelFullShared2.h"         //use of no plenty of shared memory per cluster
+#include "KernelStd.h"                //no shared meory + use of 2D arrays
+#include "KernelDev.h"                //no shared memory + no deduplication of pixels
 
 using namespace alpaka;
 using namespace reco;
@@ -106,27 +110,32 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     uint32_t threadsPerBlock;
     uint32_t numBlocks;
 
-    if (maxPixels <= 255) {
+    if (maxPixels <= 4) {
         // Run one cluster in one thread, this launch will prioritize register memory
         // -------------------------------
         threadsPerBlock = 256;    //            512, 1024 silent crash
         // Calculate how many needed blocks needed to cover all clusters
         numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
     }
-/*
-
-    else if (maxPixels <= 128) {
+    else if (maxPixels <= 8) {
         // Run one cluster in one block, where threads work cooperatively this launch will prioritize shared memory
         // -------------------------------
-        threadsPerBlock = 128;         
+        threadsPerBlock = 256;         
+        numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
+        //numBlocks = numClustersToRun;
+    }
+    else if (maxPixels <= 16) {
+        // Run one cluster in one block, where threads work cooperatively this launch will prioritize shared me$        // -------------------------------
+        threadsPerBlock = 16;
+        //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
         numBlocks = numClustersToRun;
     }
-    else if (maxPixels <= 256) {
-        // -------------------------------
-        threadsPerBlock = 128;       
-        numBlocks = numClustersToRun;
-    }
-*/
+//    else if (maxPixels <= 32) {
+//        // -------------------------------
+//        threadsPerBlock = 32;       
+//        //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
+//        numBlocks = numClustersToRun;
+//    }
     const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
     //const auto MyworkDiv = make_workdiv<Acc1D>(1, 1);
     //const auto MyworkDiv = debugMode ? make_workdiv<Acc1D>(1, 1) : make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
@@ -140,10 +149,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     //std::cout << "Launching kernel with " << numBlocks << " blocks and " << threadsPerBlock << " threads per block." << std::endl;
 
-    if (maxPixels <= 255) {
+    if (maxPixels <= 4) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplitStd<TrackerTraits, 255, 255, 6000>{},
+                                    //JetSplitFullRegister<TrackerTraits, 4, 8>{},
+                                    JetSplitRegister<TrackerTraits, 4, 8, 500>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
@@ -170,11 +180,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     alpaka::getPtrNative(workOnMeDevice), 
                                     numClustersToRun);
             }
-            /*
-    if (maxPixels < 16) {
+            
+    else if (maxPixels <= 8) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    Splitting::JetSplitRegister<TrackerTraits, 16, 10, 160>{},
+                                    JetSplitRegister<TrackerTraits, 8, 16, 1000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
@@ -201,11 +211,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     alpaka::getPtrNative(workOnMeDevice), 
                                     numClustersToRun);
             }
-        
-    else if (maxPixels<32) {
+
+    else if (maxPixels<=16) {
+		//std::cout << "Running 16!!!! " << std::endl;
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 32, 50, 1600>{},
+                                    JetSplitShared<TrackerTraits, 16, 32, 1000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
@@ -232,11 +243,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     alpaka::getPtrNative(workOnMeDevice), 
                                     numClustersToRun); 
             }
-            
-    else if (maxPixels<128) {
+/*
+    else if (maxPixels<=32) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 128, 50, 5000>{},
+                                    JetSplitShared<TrackerTraits, 32, 32, 1000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
@@ -263,11 +274,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     alpaka::getPtrNative(workOnMeDevice), 
                                     numClustersToRun);                                    
             }
-            
-    else if (maxPixels<255) {
+
+    else if (maxPixels<=64) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 256, 55, 5800>{},
+                                    JetSplit<TrackerTraits, 64, 128, 3000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 

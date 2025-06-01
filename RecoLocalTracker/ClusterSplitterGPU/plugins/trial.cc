@@ -345,14 +345,15 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         std::vector<uint16_t> tinyClusters;
         std::vector<uint16_t> smallClusters;
         std::vector<uint16_t> mediumClusters;
-        std::vector<uint16_t> largeClusters;
-        std::vector<uint16_t> heavyClusters;
+//        std::vector<uint16_t> largeClusters;
+//        std::vector<uint16_t> heavyClusters;
 
-        uint16_t pixelTinyThreshold = 255;
-        uint16_t pixelLowThreshold = 15;
-        uint16_t pixelMediumThreshold = 31;
-        uint16_t pixelLargeThreshold = 127;
-        uint16_t pixelHeavyThreshold = 255;
+        uint16_t pixelTinyThreshold = 4;
+        uint16_t pixelLowThreshold = 8;
+        uint16_t pixelMediumThreshold = 16;
+ //       uint16_t pixelLargeThreshold = 32;
+ //       uint16_t pixelHeavyThreshold = 64;
+ //       uint16_t pixelVeryHeavyThreshold = 128;
 
         for (size_t clusterID = 0; clusterID < clusterPixelCounts.size(); ++clusterID) {
             uint32_t pixelCount = clusterPixelCounts[clusterID];
@@ -360,56 +361,55 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             if (pixelCount <= pixelTinyThreshold) {
                 tinyClusters.push_back(clusterID);
             }
-
-            if (pixelCount <= pixelLowThreshold) {
+            else if (pixelCount <= pixelLowThreshold) {
                 smallClusters.push_back(clusterID);
             }
             else if (pixelCount <= pixelMediumThreshold) {
                 mediumClusters.push_back(clusterID);
             }
-            else if (pixelCount <= pixelLargeThreshold) {
-                largeClusters.push_back(clusterID);
-            }
-            else {
-                //std::cout << "Large cluster: " << clusterID << " with " << pixelCount << " Pixels " << std::endl;
-                heavyClusters.push_back(clusterID);
-            }
+   //         else if (pixelCount <= pixelLargeThreshold) {
+   //             largeClusters.push_back(clusterID);
+   //         }
+   //         else if (pixelCount <= pixelHeavyThreshold) {
+   //             largeClusters.push_back(clusterID);
+   //         }
+   //         else if (pixelCount <= pixelVeryHeavyThreshold) {
+   //             largeClusters.push_back(clusterID);
+   //         }
+   //         else {
+   //             std::cout << "Large cluster: " << clusterID << " with " << pixelCount << " Pixels " << std::endl;
+   //             heavyClusters.push_back(clusterID);
+   //         }
         }
 
-        if (!tinyClusters.empty()) {
 
+        if (!tinyClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
-                  tkDigi.view(), //tkClusters.view(), 
+                  tkDigi.view(), //tkClusters.view(),
                   tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
                   expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
                   centralMIPCharge_, chargePerUnit_, fractionalWidth_,
-                  tkOutputDigis.view(), 
+                  tkOutputDigis.view(),
                   //tkOutputClusters.view(),
                   clusterCounterDevice.data(), pixelCounterDevice.data(),
                   vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   tinyClusters.data(), tinyClusters.size(), pixelTinyThreshold, queue);
         }
-        alpaka::wait(queue);  // Ensure the transfer is complete
-
-/*
 
         if (!smallClusters.empty()) {
-
             Splitting::runKernels<pixelTopology::Phase1>(
-                  tkDigi.view(), //tkClusters.view(), 
+                  tkDigi.view(), //tkClusters.view(),
                   tkCandidates.view(), tkgeoclusters.view(), ptMin_, deltaR_, chargeFracMin_,
                   expSizeXAtLorentzAngleIncidence_, expSizeXDeltaPerTanAlpha_, expSizeYAtNormalIncidence_,
                   centralMIPCharge_, chargePerUnit_, fractionalWidth_,
-                  tkOutputDigis.view(), 
+                  tkOutputDigis.view(),
                   //tkOutputClusters.view(),
                   clusterCounterDevice.data(), pixelCounterDevice.data(),
                   vertexX, vertexY, vertexZ, vertexEta, vertexPhi,
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   smallClusters.data(), smallClusters.size(), pixelLowThreshold, queue);
         }
-        alpaka::wait(queue);  // Ensure the transfer is complete
-
 
         // Single call for medium clusters
         if (!mediumClusters.empty()) {
@@ -425,7 +425,8 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   mediumClusters.data(), mediumClusters.size(), pixelMediumThreshold, queue);
         }        
-        alpaka::wait(queue);  // Ensure the transfer is complete
+        
+/*
         // Single call for large clusters
         if (!largeClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(

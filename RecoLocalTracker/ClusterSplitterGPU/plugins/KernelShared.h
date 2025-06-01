@@ -45,6 +45,9 @@
 
 #include "Cluster_test.h"
 
+#include <cmath>
+#include <alpaka/math/MathStdLib.hpp>
+
 using namespace alpaka;
 using namespace reco;
 
@@ -54,7 +57,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   namespace Splitting {
 
     template <typename TrackerTraits, uint32_t maxPixels, uint8_t maxSubClusters, uint16_t extendedMaxPixels>
-    struct JetSplit {
+    struct JetSplitShared {
 
         // Main operator function
         template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>
@@ -174,10 +177,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 float jetPz = candidateView.pz(candIdx);
 
                 // Compute jet transverse momentum, eta, and phi
-                float jetPt = sqrt(jetPx * jetPx + jetPy * jetPy);
-                float jetP  = sqrt(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz);
-                float jetEta = 0.5 * log((jetP + jetPz) / (jetP - jetPz));
-                float jetPhi = atan2(jetPy, jetPx);
+                float jetPt = sqrtf(jetPx * jetPx + jetPy * jetPy);
+                float jetP  = sqrtf(jetPx * jetPx + jetPy * jetPy + jetPz * jetPz);
+                float jetEta = 0.5 * logf((jetP + jetPz) / (jetP - jetPz));
+                float jetPhi = atan2f(jetPy, jetPx);
 
                 // Print the jet information 
                 ///if (verbose_) printf("In globalThreadId=%u, Jet Information:\n", globalThreadId);
@@ -185,14 +188,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                 ///if (verbose_) printf("  jetPt = %.3f, jetEta = %.3f, jetPhi = %.3f\n\n", jetPt, jetEta, jetPhi);
 
                 // Compute the cluster's relative eta and phi
-                float r = sqrt(relX * relX + relY * relY + relZ * relZ);
-                float clusterEta = 0.5 * log((r + relZ) / (r - relZ));  // Pseudorapidity formula
-                float clusterPhi = atan2(relY, relX);  // Azimuthal angle
+                float r = sqrtf(relX * relX + relY * relY + relZ * relZ);
+                float clusterEta = 0.5 * logf((r + relZ) / (r - relZ));  // Pseudorapidity formula
+                float clusterPhi = atan2f(relY, relX);  // Azimuthal angle
 
                 // Compute differences and deltaR (assuming 'jetEta' and 'jetPhi' are known)
                 float deltaEta = clusterEta - jetEta;
-                float deltaPhi = atan2(sin(clusterPhi - jetPhi), cos(clusterPhi - jetPhi));  // Adjust for periodicity
-                float deltaR = sqrt(deltaEta * deltaEta + deltaPhi * deltaPhi);
+                float deltaPhi = atan2f(sinf(clusterPhi - jetPhi), cosf(clusterPhi - jetPhi));  // Adjust for periodicity
+                float deltaR = sqrtf(deltaEta * deltaEta + deltaPhi * deltaPhi);
 
                 doSplit = deltaR < deltaR_;
 
@@ -228,18 +231,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                         // Now, proceed with your calculations
                         float jetTanAlpha = jetDirLocalX / jetDirLocalZ;
                         float jetTanBeta = jetDirLocalY / jetDirLocalZ;
-                        float jetZOverRho = std::sqrt(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
+                        float jetZOverRho = sqrtf(jetTanAlpha * jetTanAlpha + jetTanBeta * jetTanBeta);
 
                         expSizeX = expSizeXAtLorentzAngleIncidence_ +
-                                         std::abs(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngles));
+                                         fabsf(expSizeXDeltaPerTanAlpha_ * (jetTanAlpha - tanLorentzAngles));
 
-                        expSizeY = std::sqrt((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
+                        expSizeY = sqrtf((expSizeYAtNormalIncidence_ * expSizeYAtNormalIncidence_) +
                                                    thickness * thickness / (pitchY * pitchY) * jetTanBeta * jetTanBeta);
                         
                         if (expSizeX < 1.f) expSizeX = 1.f;
                         if (expSizeY < 1.f) expSizeY = 1.f;
 
-                        expectedADC = std::sqrt(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
+                        expectedADC = sqrtf(1.08f + jetZOverRho * jetZOverRho) * centralMIPCharge_;
          
                         //printf("Trying to split: charge=%d expSizeX=%f expSizeY=%f\n",
                         //        static_cast<int>(ClusterCharge), expSizeX, expSizeY);
@@ -387,8 +390,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             //       temp_originalpixels_x, temp_originalpixels_y);
 
                                             float distX = 0.f;
-                                            if (std::abs(distanceX) > sizeX / 2.f) {
-                                                float diff = std::abs(distanceX) - sizeX / 2.f + 1.f;
+                                            if ( fabsf(distanceX) > sizeX / 2.f) {
+                                                float diff = fabsf(distanceX) - sizeX / 2.f + 1.f;
                                                 distX = diff * diff;
                                             } else {
                                                 float scaled = 2.f * distanceX / sizeX;
@@ -396,15 +399,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             }
 
                                             float distY = 0.f;
-                                            if (std::abs(distanceY) > sizeY / 2.f) {
-                                                float diff = std::abs(distanceY) - sizeY / 2.f + 1.f;
+                                            if ( fabsf(distanceY) > sizeY / 2.f) {
+                                                float diff = fabsf(distanceY) - sizeY / 2.f + 1.f;
                                                 distY = diff * diff;
                                             } else {
                                                 float scaled = 2.f * distanceY / sizeY;
                                                 distY = scaled * scaled;
                                             }
 
-                                            float dist = std::sqrt(distX + distY);
+                                            float dist = sqrtf(distX + distY);
                                             //printf("subClusterIdx=%u distX=%f distanceY=%f dist=%f\n", subClusterIdx, distanceX, distanceY, dist );
 
                                             if (dist < minDist) {
@@ -535,6 +538,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     float temp_x = pixelX_cache[pixel_index];
                                     float temp_y = pixelY_cache[pixel_index];
 
+                                    float scaledFrac = expectedADC * fractionalWidth_;
+                                    float invScaledFrac = 1.f / scaledFrac;
+                                    float sizeX_half = sizeX / 2.f;
+                                    float sizeY_half = sizeY / 2.f;
+
                                     for (uint8_t k = 0; k < sub; ++k) {
 
                                         float maxEst = 0.f;
@@ -551,22 +559,40 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             float dy = temp_y - cy;
 
                                             float dist = 0.f;
-                                            float absX = std::abs(dx), absY = std::abs(dy);
+                                            //float absX = std::abs(dx), absY = std::abs(dy);
+                                            float absX = fabsf(dx), absY = fabsf(dy);
+                                            if ( absX > sizeX_half ) {
+                                                //dist += (absX - sizeX / 2.f + 1.f) * (absX - sizeX / 2.f + 1.f);
+                                                float norm_dx = absX - sizeX / 2.f + 1.f;
+                                                dist = fmaf(norm_dx, norm_dx, dist);
+                                            }
 
-                                            if (absX > sizeX / 2.f)
-                                                dist += (absX - sizeX / 2.f + 1.f) * (absX - sizeX / 2.f + 1.f);
-                                            else
-                                                dist += (2.f * dx / sizeX) * (2.f * dx / sizeX);
+                                            else {
+                                                //dist += (2.f * dx / sizeX) * (2.f * dx / sizeX);
+                                                float norm_dx = 2.f * dx / sizeX;
+                                                dist = fmaf(norm_dx, norm_dx, dist);
+                                            }
 
-                                            if (absY > sizeY / 2.f)
-                                                dist += (absY - sizeY / 2.f + 1.f) * (absY - sizeY / 2.f + 1.f);
-                                            else
-                                                dist += (2.f * dy / sizeY) * (2.f * dy / sizeY);
+                                            if (absY > sizeY_half) {
+                                                //dist += (absY - sizeY / 2.f + 1.f) * (absY - sizeY / 2.f + 1.f);
+                                                float norm_dy = absY - sizeY / 2.f + 1.f;
+                                                dist = fmaf(norm_dy, norm_dy, dist);
+                                            }
 
-                                            float distance = std::sqrt(dist);
-                                            float nsig = (clusterSignal - expectedADC) / (expectedADC * fractionalWidth_);
-                                            float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f;
+                                            else {
+                                                //dist += (2.f * dy / sizeY) * (2.f * dy / sizeY);
+                                                float norm_dy = 2.f * dy / sizeY;
+                                                dist = fmaf(norm_dy, norm_dy, dist);
+                                            }
+
+                                            float distance = sqrtf(dist);
+                                            float nsig = (clusterSignal - expectedADC) * invScaledFrac;
+                                            float clQest = 1.f / (1.f + expf(nsig)) + 1e-6f;
                                             float clDest = 1.f / (distance + 0.05f);
+
+                                            //float inv_sqrt_dist = alpaka::math::rsqrt(dist);
+                                            //float clDest = inv_sqrt_dist / (1.f + 0.05f * inv_sqrt_dist);
+
                                             float est = clQest * clDest;
 
                                             if (est > maxEst) {
@@ -608,7 +634,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                                 // Each thread checks part of the subcluster array
                                 for (uint16_t i = threadIdx; i < meanExp; i += blockDim) {
-                                    if (std::abs(clx[i] - oldclx[i]) > 0.01f || std::abs(cly[i] - oldcly[i]) > 0.01f) {
+                                    if (fabsf(clx[i] - oldclx[i]) > 0.01f || fabsf(cly[i] - oldcly[i]) > 0.01f) {
                                         // Someone observed movement; mark as not ready to stop
                                         blockShouldStop = false;
                                     }

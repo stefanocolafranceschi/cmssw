@@ -54,7 +54,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   namespace Splitting {
 
     template <typename TrackerTraits, uint32_t maxPixels, uint8_t maxSubClusters, uint16_t extendedMaxPixels>
-    struct JetSplitFullShared {
+    struct JetSplitFullShared2 {
 
         // Main operator function
         template <typename TAcc, typename = std::enable_if_t<isAccelerator<TAcc>>>
@@ -97,13 +97,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
             if (blockIdx >= numClustersToRun) return;
             const uint32_t clusterIdx = workOnMe[blockIdx];
-            //printf("KernelShared; Running on blockIdx=%u threadIdx=%u clusterIdx=%u\n", blockIdx, threadIdx, clusterIdx);
 
-            uint16_t pixelX_cache[maxPixels];
-            uint16_t pixelY_cache[maxPixels];
-            uint16_t pixelADC_cache[maxPixels];
-            uint16_t pixel_info[maxPixels];
-            uint8_t subpixelOffset[maxPixels];
+            //printf("KernelShared; maxPixels=%u Running on blockIdx=%u threadIdx=%u clusterIdx=%u\n", maxPixels, blockIdx, threadIdx, clusterIdx);
+
+            __attribute__((shared)) uint16_t pixelX_cache[maxPixels];
+            __attribute__((shared)) uint16_t pixelY_cache[maxPixels];
+            __attribute__((shared)) uint16_t pixelADC_cache[maxPixels];
+            __attribute__((shared)) uint16_t pixel_info[maxPixels];
+            __attribute__((shared)) uint8_t subpixelOffset[maxPixels];
 
             __attribute__((shared)) uint8_t scoresIndices[maxPixels];
             __attribute__((shared)) float scoresValues[maxPixels];
@@ -117,7 +118,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             __attribute__((shared)) uint8_t clusterForPixel[extendedMaxPixels]; 
 
             __attribute__((shared)) bool blockShouldStop;
-
 
             const uint32_t begin = geoclusterView.pixelStart(clusterIdx);
             const uint32_t end = begin + geoclusterView.pixelCount(clusterIdx);                
@@ -265,6 +265,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
                             // Loading the data from the SoA --------------------------
                             uint32_t offset = 0;
+/*
                             // Filling local cache for faster access and sub (for avoiding repeated pixels large arrays)
                             for (uint16_t jj = begin, matchIdx = 0; jj < end && matchIdx < maxPixels; ++jj, ++matchIdx) {
                                 pixelX_cache[matchIdx] = digiView.xx(jj);
@@ -279,9 +280,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 subpixelOffset[matchIdx] = offset;
                                 offset += pixel_info[matchIdx];  // accumulate subpixels
                             }
+*/
 
-/*
                             // Filling local cache for faster access and sub (for avoiding repeated pixels large arrays)
+                            float scale = (expectedADC / centralMIPCharge_) / chargePerUnit_;
                             for (uint16_t idx = threadIdx; idx < pixelCounter && idx < maxPixels; idx += blockDim) {
                                 uint16_t jj = begin + idx;
                                 pixelX_cache[idx] = digiView.xx(jj);
@@ -289,13 +291,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 uint16_t charge = digiView.adc(jj);
                                 pixelADC_cache[idx] = charge;
 
-                                uint16_t sub = static_cast<int>( charge) / chargePerUnit_ * expectedADC / centralMIPCharge_;
+                                uint16_t sub = static_cast<int>( charge * scale );
                                 
                                 if (sub < 1) sub = 1;
                                 pixel_info[idx] = sub;
                                 //printf("%u x=%u y=%u c=%u, sub=%u \n", idx, pixelX_cache[idx], pixelY_cache[idx], pixelADC_cache[idx], pixel_info[idx] );
-
                             }
+                            alpaka::syncBlockThreads(acc);                            
 
                             if (threadIdx == 0) {
                                 uint32_t offset = 0;
@@ -304,9 +306,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     offset += pixel_info[i];  // accumulate subpixels
                                 }
                             }
-
                             alpaka::syncBlockThreads(acc);                            
-*/
                             //-----------------------------------
 
 
@@ -455,13 +455,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         if (temp_originalpixels_x == -1.f || temp_originalpixels_y == -1.f) continue;
 
                                         // Compute distances to all subclusters
+                                        float sizeX_half = sizeX / 2.f;
+                                        float sizeY_half = sizeY / 2.f;
+
                                         for (uint8_t subClusterIdx = 0; subClusterIdx < meanExp; ++subClusterIdx) {
                                             float distanceX = temp_originalpixels_x - clx[subClusterIdx];
                                             float distanceY = temp_originalpixels_y - cly[subClusterIdx];
 
                                             float distX = 0.f;
-                                            if (fabsf(distanceX) > sizeX / 2.f) {
-                                                float diff = fabsf(distanceX) - sizeX / 2.f + 1.f;
+                                            if ( fabsf(distanceX) > sizeX / 2.f) {
+                                                float diff = fabsf(distanceX) - sizeX_half + 1.f;
                                                 distX = diff * diff;
                                             } else {
                                                 float scaled = 2.f * distanceX / sizeX;
@@ -469,8 +472,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             }
 
                                             float distY = 0.f;
-                                            if (fabsf(distanceY) > sizeY / 2.f) {
-                                                float diff = fabsf(distanceY) - sizeY / 2.f + 1.f;
+                                            if ( fabsf(distanceY) > sizeY_half) {
+                                                float diff = fabsf(distanceY) - sizeY_half + 1.f;
                                                 distY = diff * diff;
                                             } else {
                                                 float scaled = 2.f * distanceY / sizeY;
@@ -496,7 +499,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 //-----------------------------------
 
 
-
+/*
                                 // SORT SCORES ------------------------------------
                                 // (not much gain in parallel, so sequential)
                                 if (threadIdx==0) {
@@ -519,6 +522,47 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 }
                                 alpaka::syncBlockThreads(acc);                            
                                 //-----------------------------------
+*/
+
+
+for (uint16_t k = 2; k <= pixelCounter; k <<= 1) {
+    for (uint16_t j = k >> 1; j > 0; j >>= 1) {
+        uint16_t tid = threadIdx;
+
+        if (tid < pixelCounter) {
+            uint16_t ixj = tid ^ j;
+
+            if (ixj > tid) {
+                bool ascending = ((tid & k) == 0);
+
+                float val_tid = scoresValues[tid];
+                float val_ixj = scoresValues[ixj];
+                uint16_t idx_tid = scoresIndices[tid];
+                uint16_t idx_ixj = scoresIndices[ixj];
+
+                bool should_swap = (ascending && (
+                                        val_tid > val_ixj ||
+                                        (val_tid == val_ixj && idx_tid > idx_ixj)))
+                                || (!ascending && (
+                                        val_tid < val_ixj ||
+                                        (val_tid == val_ixj && idx_tid < idx_ixj)));
+
+                if (should_swap) {
+                    // Swap scores
+                    scoresValues[tid] = val_ixj;
+                    scoresValues[ixj] = val_tid;
+
+                    // Swap indices
+                    scoresIndices[tid] = idx_ixj;
+                    scoresIndices[ixj] = idx_tid;
+                }
+            }
+        }
+
+        alpaka::syncBlockThreads(acc);  // sync after each step
+    }
+}
+
 
 
 
@@ -534,13 +578,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     float temp_x = pixelX_cache[pixel_index];
                                     float temp_y = pixelY_cache[pixel_index];
 
+                                    float scaledFrac = expectedADC * fractionalWidth_;
+                                    float invScaledFrac = 1.f / scaledFrac;
+                                    float sizeX_half = sizeX / 2.f;
+                                    float sizeY_half = sizeY / 2.f;
+
                                     for (uint8_t k = 0; k < sub; ++k) {
 
                                         float maxEst = 0.f;
                                         int cl = -1;
 
                                         for (uint16_t subcluster_index = 0; subcluster_index < meanExp && subcluster_index < maxSubClusters; ++subcluster_index) {
-                                            //printf("pixelCounter=%u subcluster_index=%u clx[%u]=%f cly[%u]=%f cls[%u]=%f sizeX=%u sizeY=%u\n ",pixel_index,subcluster_index,subcluster_index,clx[subcluster_index],subcluster_index,cly[subcluster_index],subcluster_index,cls[subcluster_index],sizeX,sizeY);
+                                            //printf("pixelCounter=%u subcluster_index=%u clx[%u]=%f cly[%u]=%f cls[%u]=%f sizeX=%u sizeY=%u\n ",i,subcluster_index,subcluster_index,clx[subcluster_index],subcluster_index,cly[subcluster_index],subcluster_index,cls[subcluster_index],sizeX,sizeY);
 
                                             float cx = clx[subcluster_index];
                                             float cy = cly[subcluster_index];
@@ -550,22 +599,40 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                             float dy = temp_y - cy;
 
                                             float dist = 0.f;
+                                            //float absX = std::abs(dx), absY = std::abs(dy);
                                             float absX = fabsf(dx), absY = fabsf(dy);
-
-                                            if (absX > sizeX / 2.f)
+                                            if ( absX > sizeX_half ) {
                                                 dist += (absX - sizeX / 2.f + 1.f) * (absX - sizeX / 2.f + 1.f);
-                                            else
-                                                dist += (2.f * dx / sizeX) * (2.f * dx / sizeX);
+                                                //float norm_dx = absX - sizeX / 2.f + 1.f;
+                                                //dist = fmaf(norm_dx, norm_dx, dist);
+                                            }
 
-                                            if (absY > sizeY / 2.f)
-                                                dist += (absY - sizeY / 2.f + 1.f) * (absY - sizeY / 2.f + 1.f);
-                                            else
-                                                dist += (2.f * dy / sizeY) * (2.f * dy / sizeY);
+                                            else {
+                                                //dist += (2.f * dx / sizeX) * (2.f * dx / sizeX);
+                                                float norm_dx = 2.f * dx / sizeX;
+                                                dist = fmaf(norm_dx, norm_dx, dist);
+                                            }
+
+                                            if (absY > sizeY_half) {
+                                                //dist += (absY - sizeY / 2.f + 1.f) * (absY - sizeY / 2.f + 1.f);
+                                                float norm_dy = absY - sizeY / 2.f + 1.f;
+                                                dist = fmaf(norm_dy, norm_dy, dist);
+                                            }
+
+                                            else {
+                                                //dist += (2.f * dy / sizeY) * (2.f * dy / sizeY);
+                                                float norm_dy = 2.f * dy / sizeY;
+                                                dist = fmaf(norm_dy, norm_dy, dist);
+                                            }
 
                                             float distance = sqrtf(dist);
-                                            float nsig = (clusterSignal - expectedADC) / (expectedADC * fractionalWidth_);
-                                            float clQest = 1.f / (1.f + std::exp(nsig)) + 1e-6f;
+                                            float nsig = (clusterSignal - expectedADC) * invScaledFrac;
+                                            float clQest = 1.f / (1.f + expf(nsig)) + 1e-6f;
                                             float clDest = 1.f / (distance + 0.05f);
+
+                                            //float inv_sqrt_dist = alpaka::math::rsqrt(dist);
+                                            //float clDest = inv_sqrt_dist / (1.f + 0.05f * inv_sqrt_dist);
+
                                             float est = clQest * clDest;
 
                                             if (est > maxEst) {
@@ -592,12 +659,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 }
                                 alpaka::syncBlockThreads(acc);
 
-
                                 // Recompute cluster centers
                                 if (verbose_) printf("Recomputing cluster centers.........\n");
                                 if (threadIdx == 0) blockShouldStop = true;  // Assume we will stop
                                 alpaka::syncBlockThreads(acc);
-
 
                                 //if (threadIdx == 0) {
                                     //for (uint16_t oo = 0; oo < meanExp; oo++) {
@@ -626,14 +691,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
 
 
-if (threadIdx==0) {
-
                                 //for (uint16_t i = 0; i < extendedMaxPixels; ++i) {
                                 //    printf("i=%d clusterForPixel=%d\n",i,clusterForPixel[i]);
                                 //}
 
                                 int nnn = 0 ;
-                                for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
+                                for (uint16_t i = threadIdx; i < pixelCounter && i < maxPixels; i+=blockDim) {
 
                                     uint16_t x = pixelX_cache[i];
                                     uint16_t y = pixelY_cache[i];                                
@@ -647,14 +710,17 @@ if (threadIdx==0) {
                                         uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
                                         //printf("nnn=%d x*charge=%d  y*charge=%d  clx=%f  cly=%f  cls=%f\n", nnn, x * charge, y * charge, clx[ clusterForPixel[nnn] ],cly[ clusterForPixel[nnn] ],cls[ clusterForPixel[nnn] ]);
 
-                                        clx[ clusterForPixel[nnn] ] += x * charge;
-                                        cly[ clusterForPixel[nnn] ] += y * charge;
-                                        cls[ clusterForPixel[nnn] ] += charge;
+                                        //clx[ clusterForPixel[nnn] ] += x * charge;
+                                        //cly[ clusterForPixel[nnn] ] += y * charge;
+                                        //cls[ clusterForPixel[nnn] ] += charge;                                        
+                                        alpaka::atomicAdd(acc, &clx[clusterForPixel[nnn]], static_cast<float>(x * charge));
+                                        alpaka::atomicAdd(acc, &cly[clusterForPixel[nnn]], static_cast<float>(y * charge));
+                                        alpaka::atomicAdd(acc, &cls[clusterForPixel[nnn]], static_cast<float>(charge));
                                         nnn++;
                                     }
                                 }
 
-                                for (uint8_t subcluster_index = 0; subcluster_index < meanExp; subcluster_index++) {
+                                for (uint8_t subcluster_index = threadIdx; subcluster_index < meanExp; subcluster_index+=blockDim) {
                                     if (cls[subcluster_index] != 0) {
                                         clx[subcluster_index] /= cls[subcluster_index];
                                         cly[subcluster_index] /= cls[subcluster_index];
@@ -662,77 +728,71 @@ if (threadIdx==0) {
                                     //printf("Center for cluster, clx[%u]=%f cly[%u]=%f\n",subcluster_index, clx[subcluster_index], subcluster_index, cly[subcluster_index]);
                                     cls[subcluster_index] = 0;
                                 }
-}
+
                                 alpaka::syncBlockThreads(acc);  // Make sure all threads completed and wrote to blockShouldStop
+
                             }
 
 
 
-                            if (threadIdx==0) {          
-                                //storeOutputDigis
-                                uint32_t kkk = 0;
-                                for (uint16_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
+                            //storeOutputDigis
+                            uint32_t kkk = 0;
+                            for (uint16_t cl = 0; cl < static_cast<int>(meanExp); ++cl) {
 
-                                    uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
-                                    uint32_t pixelStartWritingAt = alpaka::atomicAdd(acc, pixelCounterDevice, 0u);
-                                    uint32_t pixelOffset = 0;
+                                uint32_t clusterIndex = alpaka::atomicAdd(acc, clusterCounterDevice, 1u);
+                                uint32_t pixelStartWritingAt = alpaka::atomicAdd(acc, pixelCounterDevice, 0u);
+                                uint32_t pixelOffset = 0;
 
-                                    int nnn = 0;
+                                int nnn = 0;
 
-                                    for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
+                                for (uint16_t i = threadIdx; i < pixelCounter && i < maxPixels; i+=blockDim) {
 
-                                        uint16_t x = pixelX_cache[i];
-                                        uint16_t y = pixelY_cache[i];                                
+                                    uint16_t x = pixelX_cache[i];
+                                    uint16_t y = pixelY_cache[i];                                
 
-                                        uint8_t sub = pixel_info[i];
-                                        uint16_t adc = pixelADC_cache[i];
-                                        uint16_t perDiv = adc / sub;
+                                    uint8_t sub = pixel_info[i];
+                                    uint16_t adc = pixelADC_cache[i];
+                                    uint16_t perDiv = adc / sub;
 
-                                        uint32_t writeCharge = 0;
+                                    uint32_t writeCharge = 0;
 
-                                        for (uint8_t k = 0; k < sub; k++, nnn++) {
-                                            if (clusterForPixel[nnn] == cl) {
-                                                uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
-                                                writeCharge += charge;
-                                            }
-                                        }
-
-                                        // Only write if this pixel contributed subpixels to cluster cl
-                                        if (writeCharge > 0) {
-                                            uint32_t outIdx = pixelStartWritingAt + pixelOffset;
-                                            uint32_t rawIdArr = digiView.rawIdArr(begin);
-
-            /*
-                                            if (kkk > (end - begin)) {
-                                                printf("Error, more clusters than original");
-                                                return;
-                                            }
-
-                                            outputDigis.clus(outIdx)      = clusterIndex;
-                                            outputDigis.xx(outIdx)        = x;
-                                            outputDigis.yy(outIdx)        = y;
-                                            outputDigis.adc(outIdx)       = writeCharge;
-                                            outputDigis.rawIdArr(outIdx)  = rawIdArr;
-                                            outputDigis.moduleId(outIdx)  = moduleId;
-
-                                            alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
-            */
-                                            if (verbose_) {
-                                                uint16_t moduleId = geoclusterView.moduleId(clusterIdx);
-                                                printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
-                                                   candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
-                                            }
-                                            pixelOffset++;
-                                            kkk++;
+                                    for (uint8_t k = 0; k < sub; k++, nnn++) {
+                                        if (clusterForPixel[nnn] == cl) {
+                                            uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
+                                            writeCharge += charge;
                                         }
                                     }
+
+                                    // Only write if this pixel contributed subpixels to cluster cl
+                                    if (writeCharge > 0) {
+                                        uint32_t outIdx = pixelStartWritingAt + pixelOffset;
+                                        uint32_t rawIdArr = digiView.rawIdArr(begin);
+
+        /*
+                                        if (kkk > (end - begin)) {
+                                            printf("Error, more clusters than original");
+                                            return;
+                                        }
+
+                                        outputDigis.clus(outIdx)      = clusterIndex;
+                                        outputDigis.xx(outIdx)        = x;
+                                        outputDigis.yy(outIdx)        = y;
+                                        outputDigis.adc(outIdx)       = writeCharge;
+                                        outputDigis.rawIdArr(outIdx)  = rawIdArr;
+                                        outputDigis.moduleId(outIdx)  = moduleId;
+*/
+                                        alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
+        
+                                        if (verbose_) {
+                                            uint16_t moduleId = geoclusterView.moduleId(clusterIdx);
+                                            printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+                                               candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
+                                        }
+                                        pixelOffset++;
+                                        kkk++;
+                                    }
                                 }
-                                return;
-                            }
-                           
-
-
-
+                            }                        
                         }
 
                     }
