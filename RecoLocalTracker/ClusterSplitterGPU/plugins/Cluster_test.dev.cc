@@ -44,13 +44,13 @@
 #include "DataFormats/CandidateSoA/interface/alpaka/CandidatesSoACollection.h"
 
 #include "Cluster_test.h"
-#include "KernelFullRegister.h"       //no shared memory + no use of large array
+//#include "KernelFullRegister.h"       //no shared memory + no use of large array
 #include "KernelRegister.h"           //no shared memory + one large array (spilled in global)
 #include "KernelShared.h"             //use of some shared memory per cluster
-#include "KernelFullShared.h"         //use of no plenty of shared memory per cluster
-#include "KernelFullShared2.h"         //use of no plenty of shared memory per cluster
-#include "KernelStd.h"                //no shared meory + use of 2D arrays
-#include "KernelDev.h"                //no shared memory + no deduplication of pixels
+//#include "KernelFullShared.h"         //use of no plenty of shared memory per cluster
+//#include "KernelFullShared2.h"         //use of no plenty of shared memory per cluster
+//#include "KernelStd.h"                //no shared meory + use of 2D arrays
+//#include "KernelDev.h"                //no shared memory + no deduplication of pixels
 
 using namespace alpaka;
 using namespace reco;
@@ -130,12 +130,25 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
         numBlocks = numClustersToRun;
     }
-//    else if (maxPixels <= 32) {
-//        // -------------------------------
-//        threadsPerBlock = 32;       
-//        //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
-//        numBlocks = numClustersToRun;
-//    }
+    else if (maxPixels <= 32) {
+        // -------------------------------
+        threadsPerBlock = 32;       
+        //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
+        numBlocks = numClustersToRun;
+    }
+    else if (maxPixels <= 64) {
+        // -------------------------------
+        threadsPerBlock = 64;       
+        //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
+        numBlocks = numClustersToRun;
+    }
+    else if (maxPixels <= 128) {
+        // -------------------------------
+        threadsPerBlock = 128;       
+        //numBlocks = (numClustersToRun + threadsPerBlock - 1) / threadsPerBlock;
+        numBlocks = numClustersToRun;
+    }
+
     const auto MyworkDiv = make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
     //const auto MyworkDiv = make_workdiv<Acc1D>(1, 1);
     //const auto MyworkDiv = debugMode ? make_workdiv<Acc1D>(1, 1) : make_workdiv<Acc1D>(numBlocks, threadsPerBlock);
@@ -213,7 +226,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             }
 
     else if (maxPixels<=16) {
-		//std::cout << "Running 16!!!! " << std::endl;
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
                                     JetSplitShared<TrackerTraits, 16, 32, 1000>{},
@@ -243,11 +255,41 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     alpaka::getPtrNative(workOnMeDevice), 
                                     numClustersToRun); 
             }
-/*
+/*            
     else if (maxPixels<=32) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplitShared<TrackerTraits, 32, 32, 1000>{},
+                                    JetSplitFullShared2<TrackerTraits, 32, 32, 5000>{},
+                                    //hitView, 
+                                    digiView, 
+                                    //clusterView, 
+                                    candidateView, 
+                                    geoclusterView,
+                                    ptMin_,
+                                    deltaR_,
+                                    chargeFracMin_,
+                                    expSizeXAtLorentzAngleIncidence_,
+                                    expSizeXDeltaPerTanAlpha_,
+                                    expSizeYAtNormalIncidence_,
+                                    centralMIPCharge_,
+                                    chargePerUnit_,
+                                    fractionalWidth_,
+                                    outputDigis,
+                                    //outputClusters,
+                                    //clusterPropertiesDevice,
+                                    clusterCounterDevice,
+                                    pixelCounterDevice,                                    
+                                    //forceXError_,
+                                    //forceYError_,
+                                    vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
+                                    verbose_, debugMode, targetDetId, targetClusterOffset,
+                                    alpaka::getPtrNative(workOnMeDevice), 
+                                    numClustersToRun);                                    
+            }
+    else if (maxPixels<=64) {
+                alpaka::exec<Acc1D>(queue, 
+                                    MyworkDiv, 
+                                    JetSplitFullShared2<TrackerTraits, 64, 32, 6000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
@@ -275,10 +317,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     numClustersToRun);                                    
             }
 
-    else if (maxPixels<=64) {
+    else if (maxPixels<=128) {
                 alpaka::exec<Acc1D>(queue, 
                                     MyworkDiv, 
-                                    JetSplit<TrackerTraits, 64, 128, 3000>{},
+                                    JetSplitFullShared2<TrackerTraits, 128, 32, 6000>{},
                                     //hitView, 
                                     digiView, 
                                     //clusterView, 
@@ -303,11 +345,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     vertexX, vertexY, vertexZ, vertexEta, vertexPhi, 
                                     verbose_, debugMode, targetDetId, targetClusterOffset,
                                     alpaka::getPtrNative(workOnMeDevice), 
-                                    numClustersToRun);
-
+                                    numClustersToRun);                                    
             }
-
-            */
+*/
     //else {
     //        std::cout << "No kernel available for the given amount of pixels: " << std::endl;
     //    }

@@ -613,8 +613,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         */
                                         if (verbose_) {
                                             uint16_t moduleId = geoclusterView.moduleId(clusterIdx);
-                                            printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
-                                               candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
+                                            printf("REG (maxpixel=%u) candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
+                                               maxPixels, candIdx,numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
                                         }
                                         pixelOffset++;
                                         kkk++;

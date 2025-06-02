@@ -345,13 +345,13 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
         std::vector<uint16_t> tinyClusters;
         std::vector<uint16_t> smallClusters;
         std::vector<uint16_t> mediumClusters;
-//        std::vector<uint16_t> largeClusters;
+        std::vector<uint16_t> largeClusters;
 //        std::vector<uint16_t> heavyClusters;
 
         uint16_t pixelTinyThreshold = 4;
         uint16_t pixelLowThreshold = 8;
         uint16_t pixelMediumThreshold = 16;
- //       uint16_t pixelLargeThreshold = 32;
+        uint16_t pixelLargeThreshold = 32;
  //       uint16_t pixelHeavyThreshold = 64;
  //       uint16_t pixelVeryHeavyThreshold = 128;
 
@@ -367,9 +367,9 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
             else if (pixelCount <= pixelMediumThreshold) {
                 mediumClusters.push_back(clusterID);
             }
-   //         else if (pixelCount <= pixelLargeThreshold) {
-   //             largeClusters.push_back(clusterID);
-   //         }
+            else if (pixelCount <= pixelLargeThreshold) {
+                largeClusters.push_back(clusterID);
+            }
    //         else if (pixelCount <= pixelHeavyThreshold) {
    //             largeClusters.push_back(clusterID);
    //         }
@@ -426,7 +426,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   mediumClusters.data(), mediumClusters.size(), pixelMediumThreshold, queue);
         }        
         
-/*
+
         // Single call for large clusters
         if (!largeClusters.empty()) {
             Splitting::runKernels<pixelTopology::Phase1>(
@@ -441,6 +441,7 @@ void trial::produce(edm::StreamID sid, device::Event& deviceEvent, device::Event
                   verbose_, debugMode, targetDetId, targetClusterOffset,
                   largeClusters.data(), largeClusters.size(), pixelLargeThreshold, queue);
         }
+/*
         alpaka::wait(queue);  // Ensure the transfer is complete
 
         if (!heavyClusters.empty()) {
