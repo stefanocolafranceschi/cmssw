@@ -60,7 +60,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   using namespace cms::alpakatools;
   namespace Splitting {
 
-
     template <typename TrackerTraits>
     void runKernels(//TrackingRecHitSoAView<TrackerTraits>& hitView,
                     SiPixelDigisSoAView& digiView,

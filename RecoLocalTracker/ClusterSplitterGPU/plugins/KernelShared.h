@@ -274,7 +274,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             storeOutputDigis(acc, digiView, outputDigis, begin, end, clusterCounterDevice, pixelCounterDevice);
                         }
                         else {
-
                             // Loading the data from the SoA --------------------------
 
                             // Filling local cache for faster access and sub (for avoiding repeated pixels large arrays)
