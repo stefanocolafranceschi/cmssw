@@ -48,7 +48,7 @@
 #include "KernelRegister.h"           //no shared memory + one large array (spilled in global)
 #include "KernelShared.h"             //use of some shared memory per cluster
 //#include "KernelFullShared.h"         //use of no plenty of shared memory per cluster
-//#include "KernelFullShared2.h"         //use of no plenty of shared memory per cluster
+#include "KernelFullShared2.h"         //use of no plenty of shared memory per cluster
 //#include "KernelStd.h"                //no shared meory + use of 2D arrays
 //#include "KernelDev.h"                //no shared memory + no deduplication of pixels
 

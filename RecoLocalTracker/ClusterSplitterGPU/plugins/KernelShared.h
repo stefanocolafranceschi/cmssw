@@ -127,8 +127,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             __attribute__((shared)) float temp_cly[maxPixels][maxSubClusters];
             __attribute__((shared)) float temp_cls[maxPixels][maxSubClusters];
 
-            __attribute__((shared)) float sharedCls[maxPixels][maxSubClusters];
-
+//            __attribute__((shared)) float shared_cls[maxSubClusters];
+            
 
 
             const uint32_t begin = geoclusterView.pixelStart(clusterIdx);
@@ -503,7 +503,26 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                 alpaka::syncBlockThreads(acc);                            
                                 //-----------------------------------
 */
+// Optimized odd-even sort for small arrays
+for (uint16_t phase = 0; phase < pixelCounter; phase++) {
+    bool isEvenPhase = (phase % 2 == 0);
+    
+    // Calculate starting index for this thread
+    uint16_t startIdx = isEvenPhase ? threadIdx * 2 : threadIdx * 2 + 1;
+    
+    if (startIdx < pixelCounter - 1) {
+        if (scoresValues[startIdx] > scoresValues[startIdx + 1] ||
+            (scoresValues[startIdx] == scoresValues[startIdx + 1] && 
+             scoresIndices[startIdx] > scoresIndices[startIdx + 1])) {
+            std::swap(scoresValues[startIdx], scoresValues[startIdx + 1]);
+            std::swap(scoresIndices[startIdx], scoresIndices[startIdx + 1]);
+        }
+    }
+    alpaka::syncBlockThreads(acc);
+}
 
+
+/*
                                 // Odd-even sort simpler than bitonic, better than bubble sort
                                 for (uint16_t phase = 0; phase < pixelCounter; phase++) {
                                     if (phase % 2 == 0) {
@@ -527,16 +546,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                     }
                                     alpaka::syncBlockThreads(acc);
                                 }
-
+*/
                                 //if (threadIdx == 0 && verbose_) {
                                 //    printf("Cluster %u Scores:\n", clusterIdx);
                                 //    for (uint16_t k = 0; k < pixelCounter; k++) {
                                 //        printf("Cluster %u Score = %.5f, Index = %d\n", clusterIdx, scoresValues[k], scoresIndices[k]);
                                 //    }
                                 //}
+/*
+if (threadIdx==0) {
 
-
-//if (threadIdx==0) {
                                 //float localCls[maxSubClusters] = {0.f};
                                 // Iterating over Scores Indices and Values                                    
                                 // Each thread handles one score index
@@ -618,8 +637,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
 
                                         // Atomically add charge to cluster total
-                                        alpaka::atomicAdd(acc, &cls[cl], static_cast<float>(charge));
-                                        //cls[cl] += static_cast<float>(charge);
+                                        //alpaka::atomicAdd(acc, &cls[cl], static_cast<float>(charge));
+
+                                        cls[cl] += static_cast<float>(charge);
 
                                         // Write cluster assignment
                                         clusterForPixel[subpixelOffset[pixel_index] + k] = cl;
@@ -632,26 +652,121 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                         //        remainingSteps, pixel_index, k, subpixelOffset[pixel_index] + k, cl, charge);
                                     }
                                 }
-//}
-                                alpaka::syncBlockThreads(acc);
-
-/*
-                                // Store local results in shared memory
-                                for (uint16_t i = 0; i < maxSubClusters; ++i) {
-                                    sharedCls[threadIdx][i] = localCls[i];
-                                }
-                                alpaka::syncBlockThreads(acc);
-
-                                // Parallel reduction
-                                if (threadIdx < maxSubClusters) {
-                                    float sum = 0.f;
-                                    for (uint16_t t = 0; t < blockDim; ++t) {
-                                        sum += sharedCls[t][threadIdx];
-                                    }
-                                    cls[threadIdx] = sum;
-                                }
-                                alpaka::syncBlockThreads(acc);
+}
 */
+
+
+
+
+                                //Hierarchical Processing
+                                 __attribute__((shared)) float shared_estimates[maxPixels];
+                                 __attribute__((shared)) int shared_best_clusters[maxPixels];
+
+                                // Process pixels sequentially to maintain exact dependency chain
+                                for (uint16_t i = 0; i < pixelCounter && i < maxPixels; i++) {
+                                    
+                                    uint16_t pixel_index = scoresIndices[i];
+                                    
+                                    uint8_t sub = pixel_info[pixel_index];
+                                    uint16_t adc = pixelADC_cache[pixel_index];
+                                    uint16_t perDiv = adc / sub;
+                                    
+                                    float temp_x = pixelX_cache[pixel_index];
+                                    float temp_y = pixelY_cache[pixel_index];
+                                    
+                                    float scaledFrac = expectedADC * fractionalWidth_;
+                                    float invScaledFrac = 1.f / scaledFrac;
+                                    float sizeX_half = sizeX / 2.f;
+                                    float sizeY_half = sizeY / 2.f;
+                                    
+                                    // Process each subpixel k sequentially (to maintain exact semantics)
+                                    for (uint8_t k = 0; k < sub; ++k) {
+                                        
+                                        float maxEst = 0.f;
+                                        int cl = -1;
+                                        
+                                        // PARALLELIZE THIS INNER LOOP: Each thread handles different subclusters
+                                        for (uint16_t sc_start = 0; sc_start < meanExp && sc_start < maxSubClusters; sc_start += blockDim) {
+                                            
+                                            uint16_t subcluster_index = sc_start + threadIdx;
+                                            float est = 0.f;
+                                            
+                                            if (subcluster_index < meanExp && subcluster_index < maxSubClusters) {
+                                                
+                                                float cx = clx[subcluster_index];
+                                                float cy = cly[subcluster_index];
+                                                float clusterSignal = cls[subcluster_index]; // Use current cls values
+                                                
+                                                float dx = temp_x - cx;
+                                                float dy = temp_y - cy;
+                                                
+                                                float dist = 0.f;
+                                                float absX = fabsf(dx), absY = fabsf(dy);
+                                                if (absX > sizeX_half) {
+                                                    float norm_dx = absX - sizeX / 2.f + 1.f;
+                                                    dist = fmaf(norm_dx, norm_dx, dist);
+                                                }
+                                                else {
+                                                    float norm_dx = 2.f * dx / sizeX;
+                                                    dist = fmaf(norm_dx, norm_dx, dist);
+                                                }
+                                                
+                                                if (absY > sizeY_half) {
+                                                    float norm_dy = absY - sizeY / 2.f + 1.f;
+                                                    dist = fmaf(norm_dy, norm_dy, dist);
+                                                }
+                                                else {
+                                                    float norm_dy = 2.f * dy / sizeY;
+                                                    dist = fmaf(norm_dy, norm_dy, dist);
+                                                }
+                                                
+                                                float distance = sqrtf(dist);
+                                                float nsig = (clusterSignal - expectedADC) * invScaledFrac;
+                                                float clQest = 1.f / (1.f + expf(nsig)) + 1e-6f;
+                                                float clDest = 1.f / (distance + 0.05f);
+                                                
+                                                est = clQest * clDest;
+                                            }
+                                            
+                                            // Store results in shared memory for reduction
+                                            shared_estimates[threadIdx] = est;
+                                            shared_best_clusters[threadIdx] = subcluster_index;
+                                            alpaka::syncBlockThreads(acc);
+                                            
+                                            // Reduction to find maximum estimate within this batch
+                                            for (uint16_t stride = blockDim / 2; stride > 0; stride /= 2) {
+                                                if (threadIdx < stride) {
+                                                    if (shared_estimates[threadIdx + stride] > shared_estimates[threadIdx]) {
+                                                        shared_estimates[threadIdx] = shared_estimates[threadIdx + stride];
+                                                        shared_best_clusters[threadIdx] = shared_best_clusters[threadIdx + stride];
+                                                    }
+                                                }
+                                                alpaka::syncBlockThreads(acc);
+                                            }
+                                            
+                                            // Thread 0 updates the global maximum
+                                            if (threadIdx == 0 && shared_estimates[0] > maxEst) {
+                                                maxEst = shared_estimates[0];
+                                                cl = shared_best_clusters[0];
+                                            }
+                                            alpaka::syncBlockThreads(acc);
+                                        }
+                                        
+                                        // Thread 0 assigns the charge and writes cluster assignment
+                                        if (threadIdx == 0) {
+                                            uint16_t charge = (k == sub - 1) ? adc - perDiv * k : perDiv;
+                                            cls[cl] += static_cast<float>(charge);
+                                            clusterForPixel[subpixelOffset[pixel_index] + k] = cl;
+                                        }
+                                        alpaka::syncBlockThreads(acc);
+                                    }
+                                }
+
+                                alpaka::syncBlockThreads(acc);
+
+
+
+
 
                                 // Recompute cluster centers
                                 if (verbose_) printf("Recomputing cluster centers.........\n");
@@ -787,11 +902,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                             */
                                         alpaka::atomicAdd(acc, pixelCounterDevice, 1u);
 
-                                        if (verbose_) {
+                                        //if (verbose_) {
                                             uint16_t moduleId = geoclusterView.moduleId(clusterIdx);            
                                             printf("candIdx=%u/%u moduleId=%u NSplit cl=%d rawIdArr %d pixel_X[%d]=%u pixel_Y[%d]=%u ADC=%d \n",
                                                    candIdx, numCandidates, moduleId, cl, rawIdArr, i, x, i, y, writeCharge);
-                                        }
+                                        //}
                                         pixelOffset++;
                                     }
                                 }
