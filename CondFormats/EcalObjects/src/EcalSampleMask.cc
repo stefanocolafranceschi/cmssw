@@ -6,15 +6,14 @@
 
 #include <cassert>
 #include "CondFormats/EcalObjects/interface/EcalSampleMask.h"
-#include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 
 using edm::LogError;
 
 EcalSampleMask::EcalSampleMask() {
   // by default, all samples are set as active
-  sampleMaskEB_ = pow(2, EcalDataFrame::MAXSAMPLES) - 1;
-  sampleMaskEE_ = pow(2, EcalDataFrame::MAXSAMPLES) - 1;
+  sampleMaskEB_ = pow(2, MAXSAMPLES) - 1;
+  sampleMaskEE_ = pow(2, MAXSAMPLES) - 1;
 }
 
 EcalSampleMask::EcalSampleMask(const unsigned int ebmask, const unsigned int eemask) {
@@ -31,9 +30,9 @@ EcalSampleMask::~EcalSampleMask() {}
 
 void EcalSampleMask::setEcalSampleMaskRecordEB(const std::vector<unsigned int> &ebmask) {
   // check that size of the vector is adequate
-  if (ebmask.size() != static_cast<unsigned int>(EcalDataFrame::MAXSAMPLES)) {
+  if (ebmask.size() != static_cast<unsigned int>(MAXSAMPLES)) {
     LogError("DataMismatch") << " in EcalSampleMask::setEcalSampleMaskRecordEB size of ebmask (" << ebmask.size()
-                             << ") need to be: " << EcalDataFrame::MAXSAMPLES << ". Bailing out." << std::endl;
+                             << ") need to be: " << MAXSAMPLES << ". Bailing out.";
     assert(0);
   }
 
@@ -44,25 +43,25 @@ void EcalSampleMask::setEcalSampleMaskRecordEB(const std::vector<unsigned int> &
     } else {
       LogError("DataMismatch")
           << "in EcalSampleMask::setEcalSampleMaskRecordEB ebmask can only have values 0 or 1, while " << ebmask.at(s)
-          << " was found. Bailing out. " << std::endl;
+          << " was found. Bailing out.";
       assert(0);
     }
   }
 
   // ordering of bits:
-  // ebmask.at(0)                         refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_
-  // ebmask.at(EcalDataFrame::MAXSAMPLES) refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEB_
+  // ebmask.at(0)          refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_
+  // ebmask.at(MAXSAMPLES) refers to the last sample read out and is mapped into the _least_ significant bit of sampleMaskEB_
   sampleMaskEB_ = 0;
   for (unsigned int sampleId = 0; sampleId < ebmask.size(); sampleId++) {
-    sampleMaskEB_ |= (0x1 << (EcalDataFrame::MAXSAMPLES - (sampleId + 1)));
+    sampleMaskEB_ |= (0x1 << (MAXSAMPLES - (sampleId + 1)));
   }
 }
 
 void EcalSampleMask::setEcalSampleMaskRecordEE(const std::vector<unsigned int> &eemask) {
   // check that size of the vector is adequate
-  if (eemask.size() != static_cast<unsigned int>(EcalDataFrame::MAXSAMPLES)) {
+  if (eemask.size() != static_cast<unsigned int>(MAXSAMPLES)) {
     LogError("DataMismatch") << " in EcalSampleMask::setEcalSampleMaskRecordEE size of eemask (" << eemask.size()
-                             << ") need to be: " << EcalDataFrame::MAXSAMPLES << ". Bailing out." << std::endl;
+                             << ") need to be: " << MAXSAMPLES << ". Bailing out.";
     assert(0);
   }
 
@@ -73,50 +72,50 @@ void EcalSampleMask::setEcalSampleMaskRecordEE(const std::vector<unsigned int> &
     } else {
       LogError("DataMismatch")
           << "in EcalSampleMask::setEcalSampleMaskRecordEE eemask can only have values 0 or 1, while " << eemask.at(s)
-          << " was found. Bailing out. " << std::endl;
+          << " was found. Bailing out. ";
       assert(0);
     }
   }
 
   // ordering of bits:
-  // eemask.at(0)                         refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEE_
-  // eemask.at(EcalDataFrame::MAXSAMPLES) refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEE_
+  // eemask.at(0)          refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEE_
+  // eemask.at(MAXSAMPLES) refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEE_
   sampleMaskEE_ = 0;
   for (unsigned int sampleId = 0; sampleId < eemask.size(); sampleId++) {
-    sampleMaskEE_ |= (0x1 << (EcalDataFrame::MAXSAMPLES - (sampleId + 1)));
+    sampleMaskEE_ |= (0x1 << (MAXSAMPLES - (sampleId + 1)));
   }
 }
 
 bool EcalSampleMask::useSampleEB(const int sampleId) const {
-  if (sampleId >= EcalDataFrame::MAXSAMPLES) {
-    LogError("DataMismatch") << "in EcalSampleMask::useSampleEB only sampleId up to: " << EcalDataFrame::MAXSAMPLES
-                             << " can be used, while: " << sampleId << " was found. Bailing out." << std::endl;
+  if (sampleId >= MAXSAMPLES) {
+    LogError("DataMismatch") << "in EcalSampleMask::useSampleEB only sampleId up to: " << MAXSAMPLES - 1
+                             << " can be used, while: " << sampleId << " was found. Bailing out.";
     assert(0);
   }
 
   // ordering convention:
-  // ebmask.at(0)                         refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_
-  // ebmask.at(EcalDataFrame::MAXSAMPLES) refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEB_
-  return (sampleMaskEB_ & (0x1 << (EcalDataFrame::MAXSAMPLES - (sampleId + 1))));
+  // sampleId 0              refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_
+  // sampleId MAXSAMPLES - 1 refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEB_
+  return (sampleMaskEB_ & (0x1 << (MAXSAMPLES - (sampleId + 1))));
 }
 
 bool EcalSampleMask::useSampleEE(const int sampleId) const {
-  if (sampleId >= EcalDataFrame::MAXSAMPLES) {
-    LogError("DataMismatch") << "in EcalSampleMask::useSampleEE only sampleId up to: " << EcalDataFrame::MAXSAMPLES
-                             << " can be used, while: " << sampleId << " was found. Bailing out." << std::endl;
+  if (sampleId >= MAXSAMPLES) {
+    LogError("DataMismatch") << "in EcalSampleMask::useSampleEE only sampleId up to: " << MAXSAMPLES - 1
+                             << " can be used, while: " << sampleId << " was found. Bailing out.";
     assert(0);
   }
 
   // ordering convention:
-  // ebmask.at(0)                         refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_
-  // ebmask.at(EcalDataFrame::MAXSAMPLES) refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEB_
-  return (sampleMaskEE_ & (0x1 << (EcalDataFrame::MAXSAMPLES - (sampleId + 1))));
+  // sampleId 0              refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEE_
+  // sampleId MAXSAMPLES - 1 refers to the last  sample read out and is mapped into the _least_ significant bit of sampleMaskEE_
+  return (sampleMaskEE_ & (0x1 << (MAXSAMPLES - (sampleId + 1))));
 }
 
 bool EcalSampleMask::useSample(const int sampleId, DetId &theCrystalId) const {
-  if (sampleId >= EcalDataFrame::MAXSAMPLES) {
-    LogError("DataMismatch") << "in EcalSampleMask::useSample only sampleId up to: " << EcalDataFrame::MAXSAMPLES
-                             << " can be used, while: " << sampleId << " was found. Bailing out." << std::endl;
+  if (sampleId >= MAXSAMPLES) {
+    LogError("DataMismatch") << "in EcalSampleMask::useSample only sampleId up to: " << MAXSAMPLES - 1
+                             << " can be used, while: " << sampleId << " was found. Bailing out.";
     assert(0);
   }
 
@@ -126,9 +125,43 @@ bool EcalSampleMask::useSample(const int sampleId, DetId &theCrystalId) const {
     return useSampleEE(sampleId);
   } else {
     LogError("DataMismatch")
-        << "EcalSampleMaskuseSample::useSample can only be called for EcalBarrel or EcalEndcap DetID" << std::endl;
+        << "EcalSampleMaskuseSample::useSample can only be called for EcalBarrel or EcalEndcap DetID";
     assert(0);
   }
 }
 
-//  LocalWords:  eemask
+EcalPh2SampleMask::EcalPh2SampleMask() {
+  // by default, all barrel samples are set as active
+  setEcalSampleMaskRecordEB((1 << MAXSAMPLES) - 1);
+  setEcalSampleMaskRecordEE(0);
+}
+
+EcalPh2SampleMask::EcalPh2SampleMask(const unsigned int mask) : EcalSampleMask(mask, 0) {}
+
+bool EcalPh2SampleMask::useSampleEB(const int sampleId) const {
+  if (sampleId >= MAXSAMPLES) {
+    LogError("DataMismatch") << "in EcalPh2SampleMask::useSampleEB only sampleId up to: " << MAXSAMPLES - 1
+                             << " can be used, while: " << sampleId << " was found. Bailing out.";
+    assert(0);
+  }
+
+  // ordering convention:
+  // sampleId 0              refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_
+  // sampleId MAXSAMPLES - 1 refers to the last sample read out and is mapped into the _least_ significant bit of sampleMaskEB_
+  return (getEcalSampleMaskRecordEB() & (0x1 << (MAXSAMPLES - (sampleId + 1))));
+}
+
+bool EcalPh2SampleMask::useSample(const int sampleId, DetId &theCrystalId) const {
+  if (sampleId >= MAXSAMPLES) {
+    LogError("DataMismatch") << "in EcalPh2SampleMask::useSample only sampleId up to: " << MAXSAMPLES - 1
+                             << " can be used, while: " << sampleId << " was found. Bailing out.";
+    assert(0);
+  }
+
+  if (theCrystalId.subdetId() == EcalBarrel) {
+    return useSampleEB(sampleId);
+  } else {
+    LogError("DataMismatch") << "EcalPh2SampleMaskuseSample::useSample can only be called for EcalBarrel DetID";
+    assert(0);
+  }
+}

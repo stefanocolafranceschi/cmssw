@@ -1,50 +1,54 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS.h"
 #include <cmath>
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
-#include <iostream>
 
-void eigen_solve_submatrix(PulseMatrix &mat, PulseVector &invec, PulseVector &outvec, unsigned NP) {
+template <class C>
+void eigen_solve_submatrix(const typename C::PulseMatrix &mat,
+                           const typename C::PulseVector &invec,
+                           typename C::PulseVector &outvec,
+                           const unsigned NP) {
   using namespace Eigen;
   switch (NP) {  // pulse matrix is always square.
     case 10: {
-      Matrix<double, 10, 10> temp = mat.topLeftCorner<10, 10>();
-      outvec.head<10>() = temp.ldlt().solve(invec.head<10>());
+      // the template keywords are needed because the matrix types are dependent types of the template parameter C
+      const auto temp = mat.template topLeftCorner<10, 10>();
+      outvec.template head<10>() = temp.ldlt().solve(invec.template head<10>());
     } break;
     case 9: {
-      Matrix<double, 9, 9> temp = mat.topLeftCorner<9, 9>();
-      outvec.head<9>() = temp.ldlt().solve(invec.head<9>());
+      const auto temp = mat.template topLeftCorner<9, 9>();
+      outvec.template head<9>() = temp.ldlt().solve(invec.template head<9>());
     } break;
     case 8: {
-      Matrix<double, 8, 8> temp = mat.topLeftCorner<8, 8>();
-      outvec.head<8>() = temp.ldlt().solve(invec.head<8>());
+      const auto temp = mat.template topLeftCorner<8, 8>();
+      outvec.template head<8>() = temp.ldlt().solve(invec.template head<8>());
     } break;
     case 7: {
-      Matrix<double, 7, 7> temp = mat.topLeftCorner<7, 7>();
-      outvec.head<7>() = temp.ldlt().solve(invec.head<7>());
+      const auto temp = mat.template topLeftCorner<7, 7>();
+      outvec.template head<7>() = temp.ldlt().solve(invec.template head<7>());
     } break;
     case 6: {
-      Matrix<double, 6, 6> temp = mat.topLeftCorner<6, 6>();
-      outvec.head<6>() = temp.ldlt().solve(invec.head<6>());
+      const auto temp = mat.template topLeftCorner<6, 6>();
+      outvec.template head<6>() = temp.ldlt().solve(invec.template head<6>());
     } break;
     case 5: {
-      Matrix<double, 5, 5> temp = mat.topLeftCorner<5, 5>();
-      outvec.head<5>() = temp.ldlt().solve(invec.head<5>());
+      const auto temp = mat.template topLeftCorner<5, 5>();
+      outvec.template head<5>() = temp.ldlt().solve(invec.template head<5>());
     } break;
     case 4: {
-      Matrix<double, 4, 4> temp = mat.topLeftCorner<4, 4>();
-      outvec.head<4>() = temp.ldlt().solve(invec.head<4>());
+      const auto temp = mat.template topLeftCorner<4, 4>();
+      outvec.template head<4>() = temp.ldlt().solve(invec.template head<4>());
     } break;
     case 3: {
-      Matrix<double, 3, 3> temp = mat.topLeftCorner<3, 3>();
-      outvec.head<3>() = temp.ldlt().solve(invec.head<3>());
+      const auto temp = mat.template topLeftCorner<3, 3>();
+      outvec.template head<3>() = temp.ldlt().solve(invec.template head<3>());
     } break;
     case 2: {
-      Matrix<double, 2, 2> temp = mat.topLeftCorner<2, 2>();
-      outvec.head<2>() = temp.ldlt().solve(invec.head<2>());
+      const auto temp = mat.template topLeftCorner<2, 2>();
+      outvec.template head<2>() = temp.ldlt().solve(invec.template head<2>());
     } break;
     case 1: {
-      Matrix<double, 1, 1> temp = mat.topLeftCorner<1, 1>();
-      outvec.head<1>() = temp.ldlt().solve(invec.head<1>());
+      const auto temp = mat.template topLeftCorner<1, 1>();
+      outvec.template head<1>() = temp.ldlt().solve(invec.template head<1>());
     } break;
     default:
       throw cms::Exception("MultFitWeirdState")
@@ -52,17 +56,20 @@ void eigen_solve_submatrix(PulseMatrix &mat, PulseVector &invec, PulseVector &ou
   }
 }
 
-PulseChiSqSNNLS::PulseChiSqSNNLS() : _chisq(0.), _computeErrors(true), _maxiters(50), _maxiterwarnings(true) {}
+template <class P>
+PulseChiSqSNNLS<P>::PulseChiSqSNNLS() : _chisq(0.), _computeErrors(true), _maxiters(50), _maxiterwarnings(true) {}
 
-PulseChiSqSNNLS::~PulseChiSqSNNLS() {}
+template <class P>
+PulseChiSqSNNLS<P>::~PulseChiSqSNNLS() {}
 
-bool PulseChiSqSNNLS::DoFit(const SampleVector &samples,
-                            const SampleMatrix &samplecov,
-                            const BXVector &bxs,
-                            const FullSampleVector &fullpulse,
-                            const FullSampleMatrix &fullpulsecov,
-                            const SampleGainVector &gains,
-                            const SampleGainVector &badSamples) {
+template <class P>
+bool PulseChiSqSNNLS<P>::DoFit(const SampleVector &samples,
+                               const SampleMatrix &samplecov,
+                               const BXVector &bxs,
+                               const FullSampleVector &fullpulse,
+                               const FullSampleMatrix &fullpulsecov,
+                               const SampleGainVector &gains,
+                               const SampleGainVector &badSamples) {
   int npulse = bxs.rows();
 
   _sampvec = samples;
@@ -74,7 +81,7 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples,
   int nPedestals = 0;
   for (int gainidx = 0; gainidx < ngains; ++gainidx) {
     SampleGainVector mask = gainidx * SampleGainVector::Ones();
-    SampleVector pedestal = (gains.array() == mask.array()).cast<SampleVector::value_type>();
+    SampleVector pedestal = (gains.array() == mask.array()).template cast<typename SampleVector::value_type>();
     if (pedestal.maxCoeff() > 0.) {
       ++nPedestals;
       _bxs.resize(npulse + nPedestals);
@@ -117,7 +124,7 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples,
   for (int ipulse = 0; ipulse < npulse; ++ipulse) {
     int bx = _bxs.coeff(ipulse);
     int offset = 7 - 3 - bx;
-    _pulsemat.col(ipulse) = fullpulse.segment<SampleVector::RowsAtCompileTime>(offset);
+    _pulsemat.col(ipulse) = fullpulse.template segment<SampleVector::RowsAtCompileTime>(offset);
   }
 
   //unconstrain pedestals already for first iteration since they should always be non-zero
@@ -211,7 +218,8 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples,
   return status;
 }
 
-bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
+template <class P>
+bool PulseChiSqSNNLS<P>::Minimize(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
   const unsigned int npulse = _bxs.rows();
 
   int iter = 0;
@@ -249,7 +257,8 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
   return status;
 }
 
-bool PulseChiSqSNNLS::updateCov(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
+template <class P>
+bool PulseChiSqSNNLS<P>::updateCov(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
   const unsigned int nsample = SampleVector::RowsAtCompileTime;
   const unsigned int npulse = _bxs.rows();
 
@@ -279,14 +288,16 @@ bool PulseChiSqSNNLS::updateCov(const SampleMatrix &samplecov, const FullSampleM
   return status;
 }
 
-double PulseChiSqSNNLS::ComputeChiSq() {
+template <class P>
+double PulseChiSqSNNLS<P>::ComputeChiSq() {
   //   SampleVector resvec = _pulsemat*_ampvec - _sampvec;
   //   return resvec.transpose()*_covdecomp.solve(resvec);
 
   return _covdecomp.matrixL().solve(_pulsemat * _ampvec - _sampvec).squaredNorm();
 }
 
-double PulseChiSqSNNLS::ComputeApproxUncertainty(unsigned int ipulse) {
+template <class P>
+double PulseChiSqSNNLS<P>::ComputeApproxUncertainty(unsigned int ipulse) {
   //compute approximate uncertainties
   //(using 1/second derivative since full Hessian is not meaningful in
   //presence of positive amplitude boundaries.)
@@ -294,7 +305,8 @@ double PulseChiSqSNNLS::ComputeApproxUncertainty(unsigned int ipulse) {
   return 1. / _covdecomp.matrixL().solve(_pulsemat.col(ipulse)).norm();
 }
 
-bool PulseChiSqSNNLS::NNLS() {
+template <class P>
+bool PulseChiSqSNNLS<P>::NNLS() {
   //Fast NNLS (fnnls) algorithm as per http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.157.9203&rep=rep1&type=pdf
 
   const unsigned int npulse = _bxs.rows();
@@ -347,7 +359,7 @@ bool PulseChiSqSNNLS::NNLS() {
       //solve for unconstrained parameters
       //need to have specialized function to call optimized versions
       // of matrix solver... this is truly amazing...
-      eigen_solve_submatrix(aTamat, aTbvec, ampvecpermtest, _nP);
+      eigen_solve_submatrix<EigenMatrixTypes<P>>(aTamat, aTbvec, ampvecpermtest, _nP);
 
       //check solution
       bool positive = true;
@@ -394,7 +406,8 @@ bool PulseChiSqSNNLS::NNLS() {
   return true;
 }
 
-void PulseChiSqSNNLS::NNLSUnconstrainParameter(Index idxp) {
+template <class P>
+void PulseChiSqSNNLS<P>::NNLSUnconstrainParameter(Index idxp) {
   aTamat.col(_nP).swap(aTamat.col(idxp));
   aTamat.row(_nP).swap(aTamat.row(idxp));
   _pulsemat.col(_nP).swap(_pulsemat.col(idxp));
@@ -404,7 +417,8 @@ void PulseChiSqSNNLS::NNLSUnconstrainParameter(Index idxp) {
   ++_nP;
 }
 
-void PulseChiSqSNNLS::NNLSConstrainParameter(Index minratioidx) {
+template <class P>
+void PulseChiSqSNNLS<P>::NNLSConstrainParameter(Index minratioidx) {
   aTamat.col(_nP - 1).swap(aTamat.col(minratioidx));
   aTamat.row(_nP - 1).swap(aTamat.row(minratioidx));
   _pulsemat.col(_nP - 1).swap(_pulsemat.col(minratioidx));
@@ -414,7 +428,8 @@ void PulseChiSqSNNLS::NNLSConstrainParameter(Index minratioidx) {
   --_nP;
 }
 
-bool PulseChiSqSNNLS::OnePulseMinimize() {
+template <class P>
+bool PulseChiSqSNNLS<P>::OnePulseMinimize() {
   //Fast NNLS (fnnls) algorithm as per http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.157.9203&rep=rep1&type=pdf
 
   //   const unsigned int npulse = 1;
@@ -429,3 +444,7 @@ bool PulseChiSqSNNLS::OnePulseMinimize() {
 
   return true;
 }
+
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
+template class PulseChiSqSNNLS<ecalPh1>;
+template class PulseChiSqSNNLS<ecalPh2>;

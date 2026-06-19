@@ -29,6 +29,9 @@
 #include "CondFormats/EcalObjects/interface/EcalTBWeights.h"
 #include "CondFormats/DataRecord/interface/EcalTBWeightsRcd.h"
 
+#include "CondFormats/EcalObjects/interface/EcalTBWeightsT.h"
+#include "CondFormats/DataRecord/interface/EcalPh2TBWeightsRcd.h"
+
 #include "CondFormats/EcalObjects/interface/EcalLinearCorrections.h"
 #include "CondFormats/DataRecord/interface/EcalLinearCorrectionsRcd.h"
 
@@ -106,6 +109,8 @@
 
 #include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 #include "CondFormats/DataRecord/interface/EcalSamplesCorrelationRcd.h"
+#include "CondFormats/EcalObjects/interface/EcalPh2SamplesCorrelation.h"
+#include "CondFormats/DataRecord/interface/EcalPh2SamplesCorrelationRcd.h"
 
 #include "CondFormats/EcalObjects/interface/EcalSimComponentShape.h"
 #include "CondFormats/DataRecord/interface/EcalSimComponentShapeRcd.h"
@@ -143,6 +148,7 @@ public:
   virtual std::unique_ptr<EcalGainRatios> produceEcalGainRatios(const EcalGainRatiosRcd&);
   virtual std::unique_ptr<EcalADCToGeVConstant> produceEcalADCToGeVConstant(const EcalADCToGeVConstantRcd&);
   virtual std::unique_ptr<EcalTBWeights> produceEcalTBWeights(const EcalTBWeightsRcd&);
+  virtual std::unique_ptr<EcalPh2TBWeights> produceEcalPh2TBWeights(const EcalPh2TBWeightsRcd&);
   virtual std::unique_ptr<EcalIntercalibConstants> getIntercalibConstantsFromConfiguration(
       const EcalIntercalibConstantsRcd&);
   virtual std::unique_ptr<EcalIntercalibConstantsMC> getIntercalibConstantsMCFromConfiguration(
@@ -197,10 +203,13 @@ public:
   virtual std::unique_ptr<Alignments> produceEcalAlignmentES(const ESAlignmentRcd&);
 
   virtual std::unique_ptr<EcalSampleMask> produceEcalSampleMask(const EcalSampleMaskRcd&);
+  virtual std::unique_ptr<EcalPh2SampleMask> produceEcalPh2SampleMask(const EcalSampleMaskRcd&);
 
   virtual std::unique_ptr<EcalTimeBiasCorrections> produceEcalTimeBiasCorrections(const EcalTimeBiasCorrectionsRcd&);
 
   virtual std::unique_ptr<EcalSamplesCorrelation> produceEcalSamplesCorrelation(const EcalSamplesCorrelationRcd&);
+  virtual std::unique_ptr<EcalPh2SamplesCorrelation> produceEcalPh2SamplesCorrelation(
+      const EcalPh2SamplesCorrelationRcd&);
 
 protected:
   //overriding from ContextRecordIntervalFinder
@@ -210,6 +219,7 @@ protected:
 
 private:
   void getWeightsFromConfiguration(const edm::ParameterSet& ps);
+  void getPh2WeightsFromConfiguration(const edm::ParameterSet& ps);
 
   // data members
   double adcToGeVEBConstant_;  // ADC -> GeV scale for barrel
@@ -315,6 +325,23 @@ private:
   std::vector<EcalWeightSet::EcalChi2WeightMatrix> chi2Matrix_;
   std::vector<EcalWeightSet::EcalChi2WeightMatrix> chi2MatrixAft_;
 
+  std::vector<ROOT::Math::SVector<double, EcalDataFrame_Ph2::MAXSAMPLES> >
+      ph2AmplWeights_;  // weights to compute amplitudes after ped subtraction
+  std::vector<ROOT::Math::SVector<double, EcalDataFrame_Ph2::MAXSAMPLES> >
+      ph2AmplWeightsAft_;  // weights to compute amplitudes after ped subtraction
+
+  std::vector<ROOT::Math::SVector<double, EcalDataFrame_Ph2::MAXSAMPLES> >
+      ph2PedWeights_;  // weights to compute amplitudes w/o ped subtraction
+  std::vector<ROOT::Math::SVector<double, EcalDataFrame_Ph2::MAXSAMPLES> >
+      ph2PedWeightsAft_;  // weights to compute amplitudes w/o ped subtraction
+
+  std::vector<ROOT::Math::SVector<double, EcalDataFrame_Ph2::MAXSAMPLES> > ph2JittWeights_;  // weights to compute jitter
+  std::vector<ROOT::Math::SVector<double, EcalDataFrame_Ph2::MAXSAMPLES> >
+      ph2JittWeightsAft_;  // weights to compute jitter
+
+  std::vector<EcalPh2WeightSet::EcalChi2WeightMatrix> ph2Chi2Matrix_;
+  std::vector<EcalPh2WeightSet::EcalChi2WeightMatrix> ph2Chi2MatrixAft_;
+
   std::string amplWeightsFile_;
   std::string amplWeightsAftFile_;
   std::string pedWeightsFile_;
@@ -337,8 +364,9 @@ private:
   std::string ESAlignmentFile_;
   std::string EBLaserAlphaFile_;
   std::string EELaserAlphaFile_;
-  unsigned int sampleMaskEB_;  // Mask to discard sample in barrel
-  unsigned int sampleMaskEE_;  // Mask to discard sample in endcaps
+  unsigned int sampleMaskEB_;   // Mask to discard sample in barrel
+  unsigned int sampleMaskEE_;   // Mask to discard sample in endcaps
+  unsigned int ph2SampleMask_;  // Mask to discard sample in barrel for Phase 2
   std::vector<double> EBtimeCorrAmplitudeBins_;
   std::vector<double> EBtimeCorrShiftBins_;
   std::vector<double> EEtimeCorrAmplitudeBins_;
@@ -351,6 +379,11 @@ private:
   std::vector<double> EEG6samplesCorrelation_;
   std::vector<double> EEG1samplesCorrelation_;
   std::string SamplesCorrelationFile_;
+
+  std::vector<double> g10samplesCorrelation_;
+  std::vector<double> g1samplesCorrelation_;
+  std::string ph2SamplesCorrelationFile_;
+
   std::string EBSimPulseShapeFile_;
   std::string EESimPulseShapeFile_;
   std::string APDSimPulseShapeFile_;
@@ -362,6 +395,7 @@ private:
   bool weightsForAsynchronousRunning_;
   bool producedEcalPedestals_;
   bool producedEcalWeights_;
+  bool producedEcalPh2Weights_;
   bool producedEcalLinearCorrections_;
   bool producedEcalIntercalibConstants_;
   bool producedEcalIntercalibConstantsMC_;
@@ -402,9 +436,12 @@ private:
   bool getLaserAlphaFromTypeEB_;
   bool getLaserAlphaFromTypeEE_;
   bool producedEcalSampleMask_;
+  bool producedEcalPh2SampleMask_;
   bool producedEcalTimeBiasCorrections_;
   bool producedEcalSamplesCorrelation_;
+  bool producedEcalPh2SamplesCorrelation_;
   bool getSamplesCorrelationFromFile_;
+  bool getPh2SamplesCorrelationFromFile_;
 
   int verbose_;  // verbosity
 };

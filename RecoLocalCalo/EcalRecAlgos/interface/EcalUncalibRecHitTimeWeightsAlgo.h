@@ -16,6 +16,7 @@
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
 #include "CondFormats/EcalObjects/interface/EcalWeightSet.h"
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitRecAbsAlgo.h"
@@ -26,6 +27,8 @@
 template <class C>
 class EcalUncalibRecHitTimeWeightsAlgo {
 public:
+  using FullSampleVector = typename EigenMatrixTypes<ecalPh1>::FullSampleVector;
+
   EcalUncalibRecHitTimeWeightsAlgo() {}
   virtual ~EcalUncalibRecHitTimeWeightsAlgo() {}
 

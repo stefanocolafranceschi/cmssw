@@ -5,6 +5,7 @@
 
 #include "CondFormats/EcalObjects/interface/EcalTimeOffsetConstant.h"
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
+#include "DataFormats/EcalDigi/interface/EcalDataFrame_Ph2.h"
 #include "RecoLocalCalo/EcalRecProducers/interface/EigenMatrixTypes_gpu.h"
 
 class EcalSampleMask;
@@ -46,6 +47,23 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
   constexpr uint32_t getLength() {
     return EigenM::RowsAtCompileTime * EigenM::ColsAtCompileTime;
   }
+
+  struct ConfigurationParametersPhase2 {
+    using type = double;
+
+    type timeFitLimitsFirstEB;
+    type timeFitLimitsSecondEB;
+    type timeConstantTermEB;
+    type timeNconstEB;
+    type amplitudeThreshEB;
+
+    type outOfTimeThreshG12pEB, outOfTimeThreshG12mEB;
+    type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
+
+    std::array<uint32_t, 3> kernelMinimizeThreads;
+
+    bool shouldRunTimingComputation;
+  };
 
   struct EventDataForScratchDevice {
     using SVT = ::ecal::multifit::SampleVector::Scalar;
@@ -104,6 +122,84 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     cms::alpakatools::device_buffer<Device, char[]> acStateDevBuf;
 
     cms::alpakatools::device_buffer<Device, bool[]> hasSwitchToGain6DevBuf;
+    cms::alpakatools::device_buffer<Device, bool[]> hasSwitchToGain1DevBuf;
+    cms::alpakatools::device_buffer<Device, bool[]> isSaturatedDevBuf;
+
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> sample_valuesDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> sample_value_errorsDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, bool[]>> useless_sample_valuesDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> chi2sNullHypotDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> sum0sNullHypotDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> sumAAsNullHypotDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, char[]>> pedestal_numsDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> tMaxAlphaBetasDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> tMaxErrorAlphaBetasDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> accTimeMaxDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> accTimeWgtDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> ampMaxAlphaBetaDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> ampMaxErrorDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> timeMaxDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> timeErrorDevBuf;
+    std::optional<cms::alpakatools::device_buffer<Device, TimeComputationState[]>> tcStateDevBuf;
+  };
+
+  struct EventDataForScratchDevicePhase2 {
+    using SVT = ::ecal::multifit::SampleVector::Scalar;
+    using SGVT = ::ecal::multifit::SampleGainVector::Scalar;
+    using SMT = ::ecal::multifit::SampleMatrix::Scalar;
+    using PMT = ::ecal::multifit::PulseMatrixType::Scalar;
+    using BXVT = ::ecal::multifit::BXVectorType::Scalar;
+
+    static constexpr auto svlength = getLength<::ecal::multifit::SampleVector>();
+    static constexpr auto sgvlength = getLength<::ecal::multifit::SampleGainVector>();
+    static constexpr auto smlength = getLength<::ecal::multifit::SampleMatrix>();
+    static constexpr auto pmlength = getLength<::ecal::multifit::PulseMatrixType>();
+    static constexpr auto bxvlength = getLength<::ecal::multifit::BXVectorType>();
+
+    // delete the default constructor because alpaka buffers do not have a default constructor
+    EventDataForScratchDevicePhase2() = delete;
+
+    explicit EventDataForScratchDevicePhase2(ConfigurationParametersPhase2 const& configParameters,
+                                             uint32_t size,
+                                             Queue& queue)
+        : samplesDevBuf{cms::alpakatools::make_device_buffer<SVT[]>(queue, size * svlength)},
+          gainsNoiseDevBuf{cms::alpakatools::make_device_buffer<SGVT[]>(queue, size * sgvlength)},
+          noisecovDevBuf{cms::alpakatools::make_device_buffer<SMT[]>(queue, size * smlength)},
+          pulse_matrixDevBuf{cms::alpakatools::make_device_buffer<PMT[]>(queue, size * pmlength)},
+          activeBXsDevBuf{cms::alpakatools::make_device_buffer<BXVT[]>(queue, size * bxvlength)},
+          acStateDevBuf{cms::alpakatools::make_device_buffer<char[]>(queue, size)},
+          hasSwitchToGain1DevBuf{cms::alpakatools::make_device_buffer<bool[]>(queue, size)},
+          isSaturatedDevBuf{cms::alpakatools::make_device_buffer<bool[]>(queue, size)} {
+      if (configParameters.shouldRunTimingComputation) {
+        sample_valuesDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size * svlength);
+        sample_value_errorsDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size * svlength);
+        useless_sample_valuesDevBuf =
+            cms::alpakatools::make_device_buffer<bool[]>(queue, size * EcalDataFrame_Ph2::MAXSAMPLES);
+        chi2sNullHypotDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        sum0sNullHypotDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        sumAAsNullHypotDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        pedestal_numsDevBuf = cms::alpakatools::make_device_buffer<char[]>(queue, size);
+
+        tMaxAlphaBetasDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        tMaxErrorAlphaBetasDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        accTimeMaxDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        accTimeWgtDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        ampMaxAlphaBetaDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        ampMaxErrorDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        timeMaxDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        timeErrorDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size);
+        tcStateDevBuf = cms::alpakatools::make_device_buffer<TimeComputationState[]>(queue, size);
+      }
+    };
+
+    cms::alpakatools::device_buffer<Device, SVT[]> samplesDevBuf;
+    cms::alpakatools::device_buffer<Device, SGVT[]> gainsNoiseDevBuf;
+
+    cms::alpakatools::device_buffer<Device, SMT[]> noisecovDevBuf;
+    cms::alpakatools::device_buffer<Device, PMT[]> pulse_matrixDevBuf;
+    cms::alpakatools::device_buffer<Device, BXVT[]> activeBXsDevBuf;
+    cms::alpakatools::device_buffer<Device, char[]> acStateDevBuf;
+
     cms::alpakatools::device_buffer<Device, bool[]> hasSwitchToGain1DevBuf;
     cms::alpakatools::device_buffer<Device, bool[]> isSaturatedDevBuf;
 

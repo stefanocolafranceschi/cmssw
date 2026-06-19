@@ -89,8 +89,8 @@ protected:
   std::pair<double, double> EBtimeFitLimits_;
   std::pair<double, double> EEtimeFitLimits_;
 
-  EcalUncalibRecHitRatioMethodAlgo<EBDataFrame> ratioMethod_barrel_;
-  EcalUncalibRecHitRatioMethodAlgo<EEDataFrame> ratioMethod_endcap_;
+  EcalUncalibRecHitRatioMethodAlgo<EBDataFrame, EcalSampleMask> ratioMethod_barrel_;
+  EcalUncalibRecHitRatioMethodAlgo<EEDataFrame, EcalSampleMask> ratioMethod_endcap_;
 
   double EBtimeConstantTerm_;
   double EBtimeNconst_;
@@ -398,7 +398,8 @@ bool EcalUncalibRecHitWorkerGlobal::run(const edm::Event& evt,
       ratioMethod_endcap_.init(*itdg, *sampleMask_, pedVec, pedRMSVec, gainRatios);
       ratioMethod_endcap_.computeTime(EEtimeFitParameters_, EEtimeFitLimits_, EEamplitudeFitParameters_);
       ratioMethod_endcap_.computeAmplitude(EEamplitudeFitParameters_);
-      EcalUncalibRecHitRatioMethodAlgo<EEDataFrame>::CalculatedRecHit crh = ratioMethod_endcap_.getCalculatedRecHit();
+      EcalUncalibRecHitRatioMethodAlgo<EEDataFrame, EcalSampleMask>::CalculatedRecHit crh =
+          ratioMethod_endcap_.getCalculatedRecHit();
       double theTimeCorrectionEE = timeCorrection(
           uncalibRecHit.amplitude(), timeCorrBias_->EETimeCorrAmplitudeBins, timeCorrBias_->EETimeCorrShiftBins);
 
@@ -437,7 +438,8 @@ bool EcalUncalibRecHitWorkerGlobal::run(const edm::Event& evt,
       ratioMethod_barrel_.fixMGPAslew(*itdg);
       ratioMethod_barrel_.computeTime(EBtimeFitParameters_, EBtimeFitLimits_, EBamplitudeFitParameters_);
       ratioMethod_barrel_.computeAmplitude(EBamplitudeFitParameters_);
-      EcalUncalibRecHitRatioMethodAlgo<EBDataFrame>::CalculatedRecHit crh = ratioMethod_barrel_.getCalculatedRecHit();
+      EcalUncalibRecHitRatioMethodAlgo<EBDataFrame, EcalSampleMask>::CalculatedRecHit crh =
+          ratioMethod_barrel_.getCalculatedRecHit();
 
       double theTimeCorrectionEB = timeCorrection(
           uncalibRecHit.amplitude(), timeCorrBias_->EBTimeCorrAmplitudeBins, timeCorrBias_->EBTimeCorrShiftBins);

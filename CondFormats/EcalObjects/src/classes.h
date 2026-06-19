@@ -71,8 +71,13 @@
 #include "CondFormats/EcalObjects/interface/EcalMustacheSCParameters.h"
 #include "CondFormats/EcalObjects/interface/EcalSCDynamicDPhiParameters.h"
 //ECAL PH2:
+#include "CondFormats/EcalObjects/interface/EcalTBWeightsT.h"
+#include "CondFormats/EcalObjects/interface/EcalWeightSetT.h"
+#include "CondFormats/EcalObjects/interface/EcalPulseShapeT.h"
+#include "CondFormats/EcalObjects/interface/EcalPulseCovarianceT.h"
 #include "CondFormats/EcalObjects/interface/EcalLiteDTUPedestals.h"
 #include "CondFormats/EcalObjects/interface/EcalCATIAGainRatios.h"
+#include "CondFormats/EcalObjects/interface/EcalPh2SamplesCorrelation.h"
 #include "CondFormats/EcalObjects/interface/EcalEBPhase2TPGAmplWeightIdMap.h"
 #include "CondFormats/EcalObjects/interface/EcalEBPhase2TPGTimeWeightIdMap.h"
 #include "CondFormats/EcalObjects/interface/EcalEBPhase2TPGLinearizationConst.h"

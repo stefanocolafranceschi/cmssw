@@ -1,8 +1,7 @@
-#ifndef EcalPulseShapes_h
-#define EcalPulseShapes_h
+#ifndef CondFormats_EcalObjects_EcalPulseShapes_h
+#define CondFormats_EcalObjects_EcalPulseShapes_h
 
 #include "CondFormats/Serialization/interface/Serializable.h"
-
 #include "CondFormats/EcalObjects/interface/EcalCondObjectContainer.h"
 
 struct EcalPulseShape {

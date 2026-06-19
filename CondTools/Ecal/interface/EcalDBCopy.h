@@ -18,6 +18,7 @@
 #include "CondFormats/EcalObjects/interface/EcalIntercalibErrors.h"
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
 #include "CondFormats/EcalObjects/interface/EcalWeightXtalGroups.h"
+#include "CondFormats/EcalObjects/interface/EcalTBWeights.h"
 #include "CondFormats/EcalObjects/interface/EcalIntercalibConstantsMC.h"
 #include "CondFormats/EcalObjects/interface/EcalLaserAlphas.h"
 #include "CondFormats/EcalObjects/interface/EcalLaserAPDPNRatiosRef.h"
@@ -38,7 +39,6 @@ namespace edm {
 
 class EcalADCToGeVConstant;
 class EcalTPGTowerStatus;
-class EcalTBWeights;
 class EcalLaserAPDPNRatios;
 class Alignments;
 class EcalTimeOffsetConstant;

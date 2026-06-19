@@ -1,5 +1,5 @@
-#ifndef EcalPulseCovariances_h
-#define EcalPulseCovariances_h
+#ifndef CondFormats_EcalObjects_EcalPulseCovariances_h
+#define CondFormats_EcalObjects_EcalPulseCovariances_h
 
 #include "CondFormats/Serialization/interface/Serializable.h"
 

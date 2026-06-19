@@ -19,6 +19,7 @@
 #include "DataFormats/EcalDetId/interface/EcalElectronicsId.h"
 #include "DataFormats/EcalDetId/interface/EcalTriggerElectronicsId.h"
 #include "DataFormats/EcalDetId/interface/EcalSubdetector.h"
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
 
 //#include "DataFormats/Provenance/interface/Timestamp.h"
 
@@ -126,6 +127,7 @@ other solution : change this dataPath name to work directly in afs, ex. :
 
   sampleMaskEB_ = ps.getUntrackedParameter<unsigned int>("sampleMaskEB", 1023);
   sampleMaskEE_ = ps.getUntrackedParameter<unsigned int>("sampleMaskEB", 1023);
+  ph2SampleMask_ = ps.getUntrackedParameter<unsigned int>("ph2SampleMask", (1 << EcalPh2SampleMask::MAXSAMPLES) - 1);
 
   EBtimeCorrAmplitudeBins_ =
       ps.getUntrackedParameter<std::vector<double> >("EBtimeCorrAmplitudeBins", std::vector<double>());
@@ -146,6 +148,11 @@ other solution : change this dataPath name to work directly in afs, ex. :
       ps.getUntrackedParameter<std::vector<double> >("EEG6samplesCorrelation", std::vector<double>());
   EEG1samplesCorrelation_ =
       ps.getUntrackedParameter<std::vector<double> >("EEG1samplesCorrelation", std::vector<double>());
+
+  // Phase 2 samples correlations
+  g10samplesCorrelation_ =
+      ps.getUntrackedParameter<std::vector<double> >("g10samplesCorrelation", std::vector<double>());
+  g1samplesCorrelation_ = ps.getUntrackedParameter<std::vector<double> >("g1samplesCorrelation", std::vector<double>());
 
   sim_pulse_shape_EB_thresh_ = ps.getParameter<double>("sim_pulse_shape_EB_thresh");
   sim_pulse_shape_EE_thresh_ = ps.getParameter<double>("sim_pulse_shape_EE_thresh");
@@ -202,11 +209,22 @@ other solution : change this dataPath name to work directly in afs, ex. :
   chi2Matrix_.resize(nTDCbins_);
   chi2MatrixAft_.resize(nTDCbins_);
 
+  ph2AmplWeights_.resize(nTDCbins_);
+  ph2AmplWeightsAft_.resize(nTDCbins_);
+  ph2PedWeights_.resize(nTDCbins_);
+  ph2PedWeightsAft_.resize(nTDCbins_);
+  ph2JittWeights_.resize(nTDCbins_);
+  ph2JittWeightsAft_.resize(nTDCbins_);
+  ph2Chi2Matrix_.resize(nTDCbins_);
+  ph2Chi2MatrixAft_.resize(nTDCbins_);
+
   // default weights for MGPA shape after pedestal subtraction
   getWeightsFromConfiguration(ps);
+  getPh2WeightsFromConfiguration(ps);
 
   producedEcalPedestals_ = ps.getUntrackedParameter<bool>("producedEcalPedestals", true);
   producedEcalWeights_ = ps.getUntrackedParameter<bool>("producedEcalWeights", true);
+  producedEcalPh2Weights_ = ps.getUntrackedParameter<bool>("producedEcalPh2Weights", true);
 
   producedEcalGainRatios_ = ps.getUntrackedParameter<bool>("producedEcalGainRatios", true);
   producedEcalADCToGeVConstant_ = ps.getUntrackedParameter<bool>("producedEcalADCToGeVConstant", true);
@@ -247,6 +265,10 @@ other solution : change this dataPath name to work directly in afs, ex. :
   if (producedEcalWeights_) {
     setWhatProduced(this, &EcalTrivialConditionRetriever::produceEcalWeightXtalGroups);
     setWhatProduced(this, &EcalTrivialConditionRetriever::produceEcalTBWeights);
+  }
+
+  if (producedEcalPh2Weights_) {
+    setWhatProduced(this, &EcalTrivialConditionRetriever::produceEcalPh2TBWeights);
   }
 
   if (producedEcalGainRatios_)
@@ -534,6 +556,10 @@ other solution : change this dataPath name to work directly in afs, ex. :
     findingRecord<EcalTBWeightsRcd>();
   }
 
+  if (producedEcalPh2Weights_) {
+    findingRecord<EcalPh2TBWeightsRcd>();
+  }
+
   if (producedEcalGainRatios_)
     findingRecord<EcalGainRatiosRcd>();
 
@@ -543,6 +569,11 @@ other solution : change this dataPath name to work directly in afs, ex. :
   producedEcalSampleMask_ = ps.getUntrackedParameter<bool>("producedEcalSampleMask", true);
   if (producedEcalSampleMask_) {
     setWhatProduced(this, &EcalTrivialConditionRetriever::produceEcalSampleMask);
+    findingRecord<EcalSampleMaskRcd>();
+  }
+  producedEcalPh2SampleMask_ = ps.getUntrackedParameter<bool>("producedEcalPh2SampleMask", true);
+  if (producedEcalPh2SampleMask_) {
+    setWhatProduced(this, &EcalTrivialConditionRetriever::produceEcalPh2SampleMask);
     findingRecord<EcalSampleMaskRcd>();
   }
   producedEcalTimeBiasCorrections_ = ps.getUntrackedParameter<bool>("producedEcalTimeBiasCorrections", false);
@@ -558,6 +589,16 @@ other solution : change this dataPath name to work directly in afs, ex. :
     if (getSamplesCorrelationFromFile_) {
       SamplesCorrelationFile_ =
           ps.getUntrackedParameter<std::string>("SamplesCorrelationFile", "EcalSamplesCorrelation.txt");
+    }
+  }
+  producedEcalPh2SamplesCorrelation_ = ps.getUntrackedParameter<bool>("producedEcalPh2SamplesCorrelation", false);
+  if (producedEcalPh2SamplesCorrelation_) {
+    setWhatProduced(this, &EcalTrivialConditionRetriever::produceEcalPh2SamplesCorrelation);
+    findingRecord<EcalPh2SamplesCorrelationRcd>();
+    getPh2SamplesCorrelationFromFile_ = ps.getUntrackedParameter<bool>("getSamplesCorrelationFromFile", false);
+    if (getPh2SamplesCorrelationFromFile_) {
+      ph2SamplesCorrelationFile_ =
+          ps.getUntrackedParameter<std::string>("ph2SamplesCorrelationFile", "EcalPh2SamplesCorrelation.txt");
     }
   }
 }
@@ -1083,6 +1124,39 @@ std::unique_ptr<EcalTBWeights> EcalTrivialConditionRetriever::produceEcalTBWeigh
     tbwgt->setValue(std::make_pair(igrp, itdc), wgt);
   }
   //   }
+  return tbwgt;
+}
+
+std::unique_ptr<EcalPh2TBWeights> EcalTrivialConditionRetriever::produceEcalPh2TBWeights(const EcalPh2TBWeightsRcd&) {
+  // create weights for the test-beam
+  auto tbwgt = std::make_unique<EcalPh2TBWeights>();
+
+  // create weights for each distinct group ID
+  int igrp = 1;
+  for (int itdc = 1; itdc <= nTDCbins_; ++itdc) {
+    // make a new set of weights
+    EcalPh2WeightSet wgt;
+    auto& mat1 = wgt.getWeightsBeforeGainSwitch();
+    auto& mat2 = wgt.getWeightsAfterGainSwitch();
+
+    // use values provided by user
+    mat1.Place_in_row(ph2AmplWeights_[itdc - 1], 0, 0);
+    mat1.Place_in_row(ph2PedWeights_[itdc - 1], 1, 0);
+    mat1.Place_in_row(ph2JittWeights_[itdc - 1], 2, 0);
+
+    // weights after gain switch
+    mat2.Place_in_row(ph2AmplWeightsAft_[itdc - 1], 0, 0);
+    mat2.Place_in_row(ph2PedWeightsAft_[itdc - 1], 1, 0);
+    mat2.Place_in_row(ph2JittWeightsAft_[itdc - 1], 2, 0);
+
+    auto& mat3 = wgt.getChi2WeightsBeforeGainSwitch();
+    auto& mat4 = wgt.getChi2WeightsAfterGainSwitch();
+    mat3 = ph2Chi2Matrix_[itdc - 1];
+    mat4 = ph2Chi2MatrixAft_[itdc - 1];
+
+    // put the weight in the container
+    tbwgt->setValue(std::make_pair(igrp, itdc), wgt);
+  }
   return tbwgt;
 }
 
@@ -2226,6 +2300,126 @@ void EcalTrivialConditionRetriever::getWeightsFromConfiguration(const edm::Param
   //       assert(chi2MatrixAft[i].size() == 10);
   chi2MatrixAft_ = chi2MatrixAft;
   //      }
+}
+
+void EcalTrivialConditionRetriever::getPh2WeightsFromConfiguration(const edm::ParameterSet& ps) {
+  std::vector<std::vector<double> > amplwgtv(nTDCbins_);
+  std::vector<std::vector<double> > amplwgtvAftGain(nTDCbins_);
+  // default weights to reco amplitude w/o pedestal subtraction
+  std::vector<std::vector<double> > pedwgtv(nTDCbins_);
+  std::vector<std::vector<double> > pedwgtvaft(nTDCbins_);
+  // default weights to reco jitter
+  std::vector<std::vector<double> > jittwgtv(nTDCbins_);
+  std::vector<std::vector<double> > jittwgtvaft(nTDCbins_);
+  std::vector<EcalPh2WeightSet::EcalChi2WeightMatrix> chi2Matrix(nTDCbins_);
+  std::vector<EcalPh2WeightSet::EcalChi2WeightMatrix> chi2MatrixAft(nTDCbins_);
+
+  if (!getWeightsFromFile_ && nTDCbins_ == 1) {
+    //As default using simple 3+1 weights
+    std::vector<double> vampl = {-0.121016,
+                                 -0.119899,
+                                 -0.120923,
+                                 -0.0848959,
+                                 0.261041,
+                                 0.509881,
+                                 0.373591,
+                                 0.134899,
+                                 -0.0233605,
+                                 -0.0913195,
+                                 -0.112452,
+                                 -0.118596,
+                                 -0.121737,
+                                 -0.121737,
+                                 -0.121737,
+                                 -0.121737};
+    amplwgtv[0] = ps.getUntrackedParameter<std::vector<double> >("ph2AmplWeights", vampl);
+
+    std::vector<double> vamplAftGain = {0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.};
+    amplwgtvAftGain[0] = ps.getUntrackedParameter<std::vector<double> >("amplWeightsAftGain", vamplAftGain);
+
+    std::vector<double> vped = {0.33333, 0.33333, 0.33333, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.};
+    pedwgtv[0] = ps.getUntrackedParameter<std::vector<double> >("pedWeights", vped);
+
+    std::vector<double> vpedAft = {0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.};
+    pedwgtvaft[0] = ps.getUntrackedParameter<std::vector<double> >("pedWeightsAft", vpedAft);
+
+    std::vector<double> vjitt = {0.04066309,
+                                 0.04066309,
+                                 0.04066309,
+                                 0.,
+                                 1.325176,
+                                 -0.04997078,
+                                 -0.504338,
+                                 -0.5024844,
+                                 -0.3903718,
+                                 0.,
+                                 0.,
+                                 0.,
+                                 0.,
+                                 0.,
+                                 0.,
+                                 0.};
+    jittwgtv[0] = ps.getUntrackedParameter<std::vector<double> >("jittWeights", vjitt);
+
+    std::vector<double> vjittAft = {
+        0., 0., 0., 0., 1.097871, -0.04551035, -0.4159156, -0.4185352, -0.3367127, 0., 0., 0., 0., 0., 0., 0.};
+    jittwgtvaft[0] = ps.getUntrackedParameter<std::vector<double> >("jittWeightsAft", vjittAft);
+
+    for (size_t i = 0; i < ecalPh2::sampleSize; ++i) {
+      for (size_t j = 0; j < ecalPh2::sampleSize; ++j) {
+        chi2Matrix[0](i, j) = 0.;
+        chi2MatrixAft[0](i, j) = 0.;
+      }
+    }
+  } else if (getWeightsFromFile_) {
+    //Read from file
+  } else {
+    //Not supported
+    edm::LogError("EcalTrivialConditionRetriever") << "Configuration not supported. Exception is raised ";
+    throw cms::Exception("WrongConfig");
+  }
+
+  for (int i = 0; i < nTDCbins_; i++) {
+    assert(amplwgtv[i].size() == ecalPh2::sampleSize);
+    assert(amplwgtvAftGain[i].size() == ecalPh2::sampleSize);
+    assert(pedwgtv[i].size() == ecalPh2::sampleSize);
+    assert(pedwgtvaft[i].size() == ecalPh2::sampleSize);
+    assert(jittwgtv[i].size() == ecalPh2::sampleSize);
+    assert(jittwgtvaft[i].size() == ecalPh2::sampleSize);
+    int j = 0;
+    for (auto it = amplwgtv[i].cbegin(); it != amplwgtv[i].cend(); ++it) {
+      ph2AmplWeights_[i][j] = *it;
+      ++j;
+    }
+    j = 0;
+    for (auto it = amplwgtvAftGain[i].cbegin(); it != amplwgtvAftGain[i].cend(); ++it) {
+      ph2AmplWeightsAft_[i][j] = *it;
+      ++j;
+    }
+    j = 0;
+    for (auto it = pedwgtv[i].cbegin(); it != pedwgtv[i].cend(); ++it) {
+      ph2PedWeights_[i][j] = *it;
+      ++j;
+    }
+    j = 0;
+    for (auto it = pedwgtvaft[i].cbegin(); it != pedwgtvaft[i].cend(); ++it) {
+      ph2PedWeightsAft_[i][j] = *it;
+      ++j;
+    }
+    j = 0;
+    for (auto it = jittwgtv[i].cbegin(); it != jittwgtv[i].cend(); ++it) {
+      ph2JittWeights_[i][j] = *it;
+      ++j;
+    }
+    j = 0;
+    for (auto it = jittwgtvaft[i].cbegin(); it != jittwgtvaft[i].cend(); ++it) {
+      ph2JittWeightsAft_[i][j] = *it;
+      ++j;
+    }
+  }
+
+  ph2Chi2Matrix_ = chi2Matrix;
+  ph2Chi2MatrixAft_ = chi2MatrixAft;
 }
 
 // --------------------------------------------------------------------------------
@@ -3454,6 +3648,10 @@ std::unique_ptr<EcalSampleMask> EcalTrivialConditionRetriever::produceEcalSample
   return std::make_unique<EcalSampleMask>(sampleMaskEB_, sampleMaskEE_);
 }
 
+std::unique_ptr<EcalPh2SampleMask> EcalTrivialConditionRetriever::produceEcalPh2SampleMask(const EcalSampleMaskRcd&) {
+  return std::make_unique<EcalPh2SampleMask>(ph2SampleMask_);
+}
+
 std::unique_ptr<EcalTimeBiasCorrections> EcalTrivialConditionRetriever::produceEcalTimeBiasCorrections(
     const EcalTimeBiasCorrectionsRcd&) {
   auto ipar = std::make_unique<EcalTimeBiasCorrections>();
@@ -3503,6 +3701,28 @@ std::unique_ptr<EcalSamplesCorrelation> EcalTrivialConditionRetriever::produceEc
   copy(EEG12samplesCorrelation_.begin(), EEG12samplesCorrelation_.end(), back_inserter(ipar->EEG12SamplesCorrelation));
   copy(EEG6samplesCorrelation_.begin(), EEG6samplesCorrelation_.end(), back_inserter(ipar->EEG6SamplesCorrelation));
   copy(EEG1samplesCorrelation_.begin(), EEG1samplesCorrelation_.end(), back_inserter(ipar->EEG1SamplesCorrelation));
+  return ipar;
+}
+
+std::unique_ptr<EcalPh2SamplesCorrelation> EcalTrivialConditionRetriever::produceEcalPh2SamplesCorrelation(
+    const EcalPh2SamplesCorrelationRcd&) {
+  if (getPh2SamplesCorrelationFromFile_) {
+    std::ifstream f;
+    f.open(edm::FileInPath(SamplesCorrelationFile_).fullPath().c_str());
+    float ww;
+    for (unsigned int j = 0; j < ecalPh2::sampleSize; ++j) {
+      f >> ww;
+      g10samplesCorrelation_.push_back(ww);
+    }
+    for (unsigned int j = 0; j < ecalPh2::sampleSize; ++j) {
+      f >> ww;
+      g1samplesCorrelation_.push_back(ww);
+    }
+    f.close();
+  }
+  auto ipar = std::make_unique<EcalPh2SamplesCorrelation>();
+  copy(g10samplesCorrelation_.begin(), g10samplesCorrelation_.end(), back_inserter(ipar->g10SamplesCorrelation));
+  copy(g1samplesCorrelation_.begin(), g1samplesCorrelation_.end(), back_inserter(ipar->g1SamplesCorrelation));
   return ipar;
 }
 

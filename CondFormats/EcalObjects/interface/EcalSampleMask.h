@@ -7,11 +7,14 @@
  **/
 
 #include "CondFormats/Serialization/interface/Serializable.h"
+#include "DataFormats/EcalDetId/interface/EBDetId.h"
+#include "DataFormats/EcalDetId/interface/EEDetId.h"
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
+#include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
+#include "DataFormats/EcalDigi/interface/EcalDataFrame_Ph2.h"
 
 #include <iostream>
 #include <vector>
-#include "DataFormats/EcalDetId/interface/EBDetId.h"
-#include "DataFormats/EcalDetId/interface/EEDetId.h"
 
 class EcalSampleMask {
 public:
@@ -29,17 +32,37 @@ public:
   void setEcalSampleMaskRecordEB(const std::vector<unsigned int> &ebmask);
   void setEcalSampleMaskRecordEE(const std::vector<unsigned int> &eemask);
 
-  float getEcalSampleMaskRecordEB() const { return sampleMaskEB_; }
-  float getEcalSampleMaskRecordEE() const { return sampleMaskEE_; }
+  unsigned int getEcalSampleMaskRecordEB() const { return sampleMaskEB_; }
+  unsigned int getEcalSampleMaskRecordEE() const { return sampleMaskEE_; }
   void print(std::ostream &s) const { s << "EcalSampleMask: EB " << sampleMaskEB_ << "; EE " << sampleMaskEE_; }
 
   bool useSampleEB(const int sampleId) const;
   bool useSampleEE(const int sampleId) const;
   bool useSample(const int sampleId, DetId &theCrystal) const;
 
+  static constexpr int MAXSAMPLES = EcalDataFrame::MAXSAMPLES;
+
 private:
   unsigned int sampleMaskEB_;
   unsigned int sampleMaskEE_;
+
+  COND_SERIALIZABLE;
+};
+
+// The Phase 2 version just has a different number of samples.
+// The EE variable will not be used.
+class EcalPh2SampleMask : public EcalSampleMask {
+public:
+  EcalPh2SampleMask();
+  // construct from pre-organized binary words
+  EcalPh2SampleMask(const unsigned int mask);
+
+  ~EcalPh2SampleMask() = default;
+
+  bool useSampleEB(const int sampleId) const;
+  bool useSample(const int sampleId, DetId &theCrystal) const;
+
+  static constexpr int MAXSAMPLES = EcalDataFrame_Ph2::MAXSAMPLES;
 
   COND_SERIALIZABLE;
 };

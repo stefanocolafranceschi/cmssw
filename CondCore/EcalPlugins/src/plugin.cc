@@ -152,6 +152,8 @@
 
 #include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 #include "CondFormats/DataRecord/interface/EcalSamplesCorrelationRcd.h"
+#include "CondFormats/EcalObjects/interface/EcalPh2SamplesCorrelation.h"
+#include "CondFormats/DataRecord/interface/EcalPh2SamplesCorrelationRcd.h"
 
 #include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
 #include "CondFormats/DataRecord/interface/EcalPulseShapesRcd.h"
@@ -243,6 +245,7 @@ REGISTER_PLUGIN(EcalSampleMaskRcd, EcalSampleMask);
 REGISTER_PLUGIN(EcalTimeBiasCorrectionsRcd, EcalTimeBiasCorrections);
 
 REGISTER_PLUGIN(EcalSamplesCorrelationRcd, EcalSamplesCorrelation);
+REGISTER_PLUGIN(EcalPh2SamplesCorrelationRcd, EcalPh2SamplesCorrelation);
 REGISTER_PLUGIN(EcalPulseShapesRcd, EcalPulseShapes);            //is EcalCondObjectContainer<EcalPulseShape>
 REGISTER_PLUGIN(EcalPulseCovariancesRcd, EcalPulseCovariances);  //is EcalCondObjectContainer<EcalPulseCovariance>
 REGISTER_PLUGIN(EcalPulseSymmCovariancesRcd,

@@ -24,7 +24,7 @@ public:
   virtual void set(const edm::Event& evt) {}
 
   virtual void run(const edm::Event& evt,
-                   const EcalDigiCollection& digis,
+                   const edm::DataFrameContainer& digis,
                    EcalUncalibratedRecHitCollection& result) = 0;
 
   virtual edm::ParameterSetDescription getAlgoDescription() = 0;

@@ -33,7 +33,9 @@ public:
   static constexpr const float* gains = ecalph2::gains;     // CATIA gain values
   static constexpr unsigned int gainId1 = 1;                // Position of gain 1 in gains array
   static constexpr unsigned int gainId10 = 0;               // Position of gain 10 in gains array
+  static constexpr unsigned int kMaxGainId = gainId10;      // Position of the maximum gain in the gains array
   static constexpr unsigned int sampleSize = 16;            // Number of samples per event
+  static constexpr unsigned int kMaxSampleIdx = 5;          // Index of the sample at the maximum of the pulse
   static constexpr unsigned int NBITS = 12;                 // Number of available bits
   static constexpr unsigned int MAXADC = (1 << NBITS) - 1;  // 2^NBITS - 1,  ADC max range
   static constexpr unsigned int kEBChannels = 61200;        // Number of channels in the barrel
@@ -43,6 +45,13 @@ public:
                                                             // simulation and reused for every kNOffsets^th channel
   static constexpr unsigned int kAdcMask = 0xFFF;           // ADC sample mask for unpacking
   static constexpr unsigned int kGainIdMask = 0x1;          // Gain id mask for unpacking
+  static constexpr unsigned int kNActiveLHCPeriods = 5;     // Number of active LHC periods for multifit algorithm
+  static constexpr unsigned int kNSamplesPerLHCPeriod = 25 / Samp_Period;    // Number of samples per LHC 25ns period
+  static constexpr unsigned int kPulseShapeTemplateSampleSize = sampleSize;  // Pulse shape template sample size for
+                                                                             // multifit Eigen matrix types
+  static constexpr unsigned int kFullSampleVectorSize =
+      (kNActiveLHCPeriods - 1) * kNSamplesPerLHCPeriod + sampleSize;  // Size of full sample vector for multifit
+                                                                      // Eigen matrix types
 };
 
 class ecalPh1 {
@@ -56,5 +65,13 @@ public:
                                                            // simulation and reused for every kNOffsets^th channel
   static constexpr unsigned int kAdcMask = 0xFFF;          // ADC sample mask for unpacking
   static constexpr unsigned int kGainIdMask = 0x3;         // Gain id mask for unpacking
+  static constexpr unsigned int kMaxGainId = 1;            // Position of the maximum gain in the gains array
+  static constexpr unsigned int kMaxSampleIdx = 5;         // Index of the sample at the maximum of the pulse
+  static constexpr unsigned int kNActiveLHCPeriods = 10;   // Number of active LHC periods for multifit algorithm
+  static constexpr unsigned int kNSamplesPerLHCPeriod = 25 / Samp_Period;  // Number of samples per LHC 25ns period
+  static constexpr unsigned int kPulseShapeTemplateSampleSize = 12;        // Pulse shape template sample size for
+                                                                           // multifit Eigen matrix types
+  static constexpr unsigned int kFullSampleVectorSize =
+      (kNActiveLHCPeriods - 1) * kNSamplesPerLHCPeriod + sampleSize;  // Size of full sample vector for multifit
 };
 #endif

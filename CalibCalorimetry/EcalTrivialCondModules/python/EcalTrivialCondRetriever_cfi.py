@@ -275,5 +275,11 @@ EcalTrivialConditionRetriever = cms.ESSource("EcalTrivialConditionRetriever",
   EEG6samplesCorrelation = cms.untracked.vdouble(
      1.00000, 0.71217, 0.47464, 0.34056, 0.26282, 0.20287, 0.17734, 0.16256, 0.15618, 0.14443),
   EEG1samplesCorrelation = cms.untracked.vdouble(
-     1.00000, 0.72698, 0.62048, 0.55691, 0.51848, 0.49147, 0.47813, 0.47007, 0.46621, 0.46265)
+     1.00000, 0.72698, 0.62048, 0.55691, 0.51848, 0.49147, 0.47813, 0.47007, 0.46621, 0.46265),
+
+  producedEcalPh2SamplesCorrelation = cms.untracked.bool(True),
+  g10samplesCorrelation = cms.untracked.vdouble(
+     1.00000, 0.71073, 0.55721, 0.46089, 0.40449, 0.35931, 0.33924, 0.32439, 0.31581, 0.30481, 0., 0., 0., 0., 0., 0.),
+  g1samplesCorrelation = cms.untracked.vdouble(
+     1.00000, 0.73354, 0.64442, 0.58851, 0.55425, 0.53082, 0.51916, 0.51097, 0.50732, 0.50409, 0., 0., 0., 0., 0., 0.)
 )

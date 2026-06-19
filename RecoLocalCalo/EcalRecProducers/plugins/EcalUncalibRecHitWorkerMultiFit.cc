@@ -55,12 +55,21 @@ public:
 private:
   void set(const edm::EventSetup& es) override;
   void set(const edm::Event& evt) override;
-  void run(const edm::Event& evt, const EcalDigiCollection& digis, EcalUncalibratedRecHitCollection& result) override;
+  void run(const edm::Event& evt,
+           const edm::DataFrameContainer& digis,
+           EcalUncalibratedRecHitCollection& result) override;
 
 public:
   edm::ParameterSetDescription getAlgoDescription() override;
 
 private:
+  using SampleVector = typename EigenMatrixTypes<ecalPh1>::SampleVector;
+  using FullSampleVector = typename EigenMatrixTypes<ecalPh1>::FullSampleVector;
+  using SampleMatrix = typename EigenMatrixTypes<ecalPh1>::SampleMatrix;
+  using FullSampleMatrix = typename EigenMatrixTypes<ecalPh1>::FullSampleMatrix;
+  using SampleMatrixGainArray = typename EigenMatrixTypes<ecalPh1>::SampleMatrixGainArray;
+  using BXVector = typename EigenMatrixTypes<ecalPh1>::BXVector;
+
   edm::ESHandle<EcalPedestals> peds;
   edm::ESGetToken<EcalPedestals, EcalPedestalsRcd> pedsToken_;
   edm::ESHandle<EcalGainRatios> gains;
@@ -127,8 +136,8 @@ private:
   std::pair<double, double> EBtimeFitLimits_;
   std::pair<double, double> EEtimeFitLimits_;
 
-  EcalUncalibRecHitRatioMethodAlgo<EBDataFrame> ratioMethod_barrel_;
-  EcalUncalibRecHitRatioMethodAlgo<EEDataFrame> ratioMethod_endcap_;
+  EcalUncalibRecHitRatioMethodAlgo<EBDataFrame, EcalSampleMask> ratioMethod_barrel_;
+  EcalUncalibRecHitRatioMethodAlgo<EEDataFrame, EcalSampleMask> ratioMethod_endcap_;
 
   double EBtimeConstantTerm_;
   double EEtimeConstantTerm_;
@@ -398,7 +407,7 @@ double EcalUncalibRecHitWorkerMultiFit::timeCorrection(float ampli,
 }
 
 void EcalUncalibRecHitWorkerMultiFit::run(const edm::Event& evt,
-                                          const EcalDigiCollection& digis,
+                                          const edm::DataFrameContainer& digis,
                                           EcalUncalibratedRecHitCollection& result) {
   if (digis.empty())
     return;
@@ -528,7 +537,7 @@ void EcalUncalibRecHitWorkerMultiFit::run(const edm::Event& evt,
           ratioMethod_endcap_.init(*itdg, *sampleMask_, pedVec, pedRMSVec, gainRatios);
           ratioMethod_endcap_.computeTime(EEtimeFitParameters_, EEtimeFitLimits_, EEamplitudeFitParameters_);
           ratioMethod_endcap_.computeAmplitude(EEamplitudeFitParameters_);
-          EcalUncalibRecHitRatioMethodAlgo<EEDataFrame>::CalculatedRecHit crh =
+          EcalUncalibRecHitRatioMethodAlgo<EEDataFrame, EcalSampleMask>::CalculatedRecHit crh =
               ratioMethod_endcap_.getCalculatedRecHit();
           double theTimeCorrectionEE = timeCorrection(
               uncalibRecHit.amplitude(), timeCorrBias_->EETimeCorrAmplitudeBins, timeCorrBias_->EETimeCorrShiftBins);
@@ -569,7 +578,7 @@ void EcalUncalibRecHitWorkerMultiFit::run(const edm::Event& evt,
           ratioMethod_barrel_.fixMGPAslew(*itdg);
           ratioMethod_barrel_.computeTime(EBtimeFitParameters_, EBtimeFitLimits_, EBamplitudeFitParameters_);
           ratioMethod_barrel_.computeAmplitude(EBamplitudeFitParameters_);
-          EcalUncalibRecHitRatioMethodAlgo<EBDataFrame>::CalculatedRecHit crh =
+          EcalUncalibRecHitRatioMethodAlgo<EBDataFrame, EcalSampleMask>::CalculatedRecHit crh =
               ratioMethod_barrel_.getCalculatedRecHit();
 
           double theTimeCorrectionEB = timeCorrection(
@@ -623,10 +632,10 @@ void EcalUncalibRecHitWorkerMultiFit::run(const edm::Event& evt,
           result.pop_back();
           continue;
         }
-        const EcalWeightSet& wset = wit->second;  // this is the EcalWeightSet
+        const auto& wset = wit->second;  // this is the EcalWeightSet
 
-        const EcalWeightSet::EcalWeightMatrix& mat1 = wset.getWeightsBeforeGainSwitch();
-        const EcalWeightSet::EcalWeightMatrix& mat2 = wset.getWeightsAfterGainSwitch();
+        const auto& mat1 = wset.getWeightsBeforeGainSwitch();
+        const auto& mat2 = wset.getWeightsAfterGainSwitch();
 
         weights[0] = &mat1;
         weights[1] = &mat2;

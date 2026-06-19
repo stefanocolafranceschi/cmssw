@@ -15,4 +15,14 @@ struct EcalMultifitParameters {
   AmplitudeFitParamsArray amplitudeFitParamsEE;
 };
 
+struct EcalMultifitParametersPhase2 {
+  static constexpr size_t kNTimeFitParams = 8;
+  static constexpr size_t kNAmplitudeFitParams = 2;
+  using TimeFitParamsArray = std::array<float, kNTimeFitParams>;
+  using AmplitudeFitParamsArray = std::array<float, kNAmplitudeFitParams>;
+
+  TimeFitParamsArray timeFitParamsEB;
+  AmplitudeFitParamsArray amplitudeFitParamsEB;
+};
+
 #endif

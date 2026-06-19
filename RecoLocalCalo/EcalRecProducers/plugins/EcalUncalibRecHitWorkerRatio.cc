@@ -60,8 +60,8 @@ protected:
   double EBtimeConstantTerm_;
   double EEtimeConstantTerm_;
 
-  EcalUncalibRecHitRatioMethodAlgo<EBDataFrame> uncalibMaker_barrel_;
-  EcalUncalibRecHitRatioMethodAlgo<EEDataFrame> uncalibMaker_endcap_;
+  EcalUncalibRecHitRatioMethodAlgo<EBDataFrame, EcalSampleMask> uncalibMaker_barrel_;
+  EcalUncalibRecHitRatioMethodAlgo<EEDataFrame, EcalSampleMask> uncalibMaker_endcap_;
 };
 
 EcalUncalibRecHitWorkerRatio::EcalUncalibRecHitWorkerRatio(const edm::ParameterSet& ps, edm::ConsumesCollector& c)
@@ -137,7 +137,8 @@ bool EcalUncalibRecHitWorkerRatio::run(const edm::Event& evt,
                                                     EEamplitudeFitParameters_,
                                                     EEtimeFitLimits_);  //GF pass mask here
 
-    EcalUncalibRecHitRatioMethodAlgo<EEDataFrame>::CalculatedRecHit crh = uncalibMaker_endcap_.getCalculatedRecHit();
+    EcalUncalibRecHitRatioMethodAlgo<EEDataFrame, EcalSampleMask>::CalculatedRecHit crh =
+        uncalibMaker_endcap_.getCalculatedRecHit();
     uncalibRecHit.setAmplitude(crh.amplitudeMax);
     uncalibRecHit.setJitter(crh.timeMax - 5);
     uncalibRecHit.setJitterError(
@@ -155,7 +156,8 @@ bool EcalUncalibRecHitWorkerRatio::run(const edm::Event& evt,
                                                     EBamplitudeFitParameters_,
                                                     EBtimeFitLimits_);  //GF pass mask here
 
-    EcalUncalibRecHitRatioMethodAlgo<EBDataFrame>::CalculatedRecHit crh = uncalibMaker_barrel_.getCalculatedRecHit();
+    EcalUncalibRecHitRatioMethodAlgo<EBDataFrame, EcalSampleMask>::CalculatedRecHit crh =
+        uncalibMaker_barrel_.getCalculatedRecHit();
 
     uncalibRecHit.setAmplitude(crh.amplitudeMax);
     if (gainSwitch) {

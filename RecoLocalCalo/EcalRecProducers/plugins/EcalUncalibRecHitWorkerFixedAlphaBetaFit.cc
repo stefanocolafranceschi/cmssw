@@ -46,8 +46,8 @@ private:
   double AmplThrEB_;
   double AmplThrEE_;
 
-  EcalUncalibRecHitFixedAlphaBetaAlgo<EBDataFrame> algoEB_;
-  EcalUncalibRecHitFixedAlphaBetaAlgo<EEDataFrame> algoEE_;
+  EcalUncalibRecHitFixedAlphaBetaAlgo<EBDataFrame, ecalPh1> algoEB_;
+  EcalUncalibRecHitFixedAlphaBetaAlgo<EEDataFrame, ecalPh1> algoEE_;
 
   double alphaEB_;
   double betaEB_;

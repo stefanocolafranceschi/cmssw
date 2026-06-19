@@ -201,13 +201,19 @@
 </class>
 
 <class name="EcalWeightSet"/>
+<class name="EcalPh2WeightSet"/>
 
 <class name="EcalTBWeights"/>
 <class name="std::pair<EcalXtalGroupId, EcalTBWeights::EcalTDCId>"/>
 <class name="std::map<std::pair<EcalXtalGroupId, EcalTBWeights::EcalTDCId>, EcalWeightSet>"/>
 <class name="std::pair<const std::pair<EcalXtalGroupId, EcalTBWeights::EcalTDCId>, EcalWeightSet>"/>
+<class name="EcalPh2TBWeights"/>
+<class name="std::pair<EcalXtalGroupId, EcalPh2TBWeights::EcalTDCId>"/>
+<class name="std::map<std::pair<EcalXtalGroupId, EcalPh2TBWeights::EcalTDCId>, EcalPh2WeightSet>"/>
+<class name="std::pair<const std::pair<EcalXtalGroupId, EcalPh2TBWeights::EcalTDCId>, EcalPh2WeightSet>"/>
 
 <class name="EcalSampleMask"/>
+<class name="EcalPh2SampleMask"/>
 
 <class name="EcalADCToGeVConstant"/>
 
@@ -283,6 +289,7 @@
 <class name="EcalTimeBiasCorrections" />
 
 <class name="EcalSamplesCorrelation" />
+<class name="EcalPh2SamplesCorrelation" />
 
 <!-- base class -->
 <class name="EcalPulseShape"/>
@@ -291,6 +298,17 @@
 <class name="EcalContainer<EEDetId,EcalPulseShape>"/>
 <class name="EcalContainer<EBDetId,EcalPulseShape>"/>
 <class name="EcalCondObjectContainer<EcalPulseShape>">
+   <field name = "eb_" mapping = "blob"/>
+   <field name = "ee_" mapping = "blob"/>
+</class>
+
+<!-- base class -->
+<class name="EcalPh2PulseShape"/>
+<!-- templates for EcalCondObjectContainer having the class as template parameter -->
+<class name="std::vector<EcalPh2PulseShape>"/>
+<class name="EcalContainer<EEDetId,EcalPh2PulseShape>"/>
+<class name="EcalContainer<EBDetId,EcalPh2PulseShape>"/>
+<class name="EcalCondObjectContainer<EcalPh2PulseShape>">
    <field name = "eb_" mapping = "blob"/>
    <field name = "ee_" mapping = "blob"/>
 </class>
@@ -307,12 +325,34 @@
 </class>
 
 <!-- base class -->
+<class name="EcalPh2PulseCovariance"/>
+<!-- templates for EcalCondObjectContainer having the class as template parameter -->
+<class name="std::vector<EcalPh2PulseCovariance>"/>
+<class name="EcalContainer<EEDetId,EcalPh2PulseCovariance>"/>
+<class name="EcalContainer<EBDetId,EcalPh2PulseCovariance>"/>
+<class name="EcalCondObjectContainer<EcalPh2PulseCovariance>">
+   <field name = "eb_" mapping = "blob"/>
+   <field name = "ee_" mapping = "blob"/>
+</class>
+
+<!-- base class -->
 <class name="EcalPulseSymmCovariance"/>
 <!-- templates for EcalCondObjectContainer having the class as template parameter -->
 <class name="std::vector<EcalPulseSymmCovariance>"/>
 <class name="EcalContainer<EEDetId,EcalPulseSymmCovariance>"/>
 <class name="EcalContainer<EBDetId,EcalPulseSymmCovariance>"/>
 <class name="EcalCondObjectContainer<EcalPulseSymmCovariance>">
+   <field name = "eb_" mapping = "blob"/>
+   <field name = "ee_" mapping = "blob"/>
+</class>
+
+<!-- base class -->
+<class name="EcalPh2PulseSymmCovariance"/>
+<!-- templates for EcalCondObjectContainer having the class as template parameter -->
+<class name="std::vector<EcalPh2PulseSymmCovariance>"/>
+<class name="EcalContainer<EEDetId,EcalPh2PulseSymmCovariance>"/>
+<class name="EcalContainer<EBDetId,EcalPh2PulseSymmCovariance>"/>
+<class name="EcalCondObjectContainer<EcalPh2PulseSymmCovariance>">
    <field name = "eb_" mapping = "blob"/>
    <field name = "ee_" mapping = "blob"/>
 </class>

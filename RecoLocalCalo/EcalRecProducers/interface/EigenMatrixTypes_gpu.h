@@ -5,14 +5,15 @@
 #include <Eigen/Dense>
 
 #include "DataFormats/EcalRecHit/interface/RecoTypes.h"
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
 
 namespace ecal {
   namespace multifit {
 
-    constexpr int SampleVectorSize = 10;
-    constexpr int FullSampleVectorSize = 19;
-    constexpr int PulseVectorSize = 12;
-    constexpr int NGains = 3;
+    constexpr int SampleVectorSize = static_cast<int>(ecalPh1::sampleSize);
+    constexpr int FullSampleVectorSize = static_cast<int>(ecalPh1::kFullSampleVectorSize);
+    constexpr int PulseVectorSize = static_cast<int>(ecalPh1::kPulseShapeTemplateSampleSize);
+    constexpr int NGains = static_cast<int>(ecalPh1::NGAINS) - 1;  // do not count 0 gain here
 
     using data_type = ::ecal::reco::ComputationScalarType;
 

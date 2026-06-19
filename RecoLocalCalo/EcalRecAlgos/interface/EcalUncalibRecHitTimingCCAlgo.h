@@ -17,6 +17,8 @@
 
 class EcalUncalibRecHitTimingCCAlgo {
 public:
+  using FullSampleVector = typename EigenMatrixTypes<ecalPh1>::FullSampleVector;
+
   EcalUncalibRecHitTimingCCAlgo(const float startTime, const float stopTime);
   double computeTimeCC(const EcalDataFrame& dataFrame,
                        const std::vector<double>& amplitudes,

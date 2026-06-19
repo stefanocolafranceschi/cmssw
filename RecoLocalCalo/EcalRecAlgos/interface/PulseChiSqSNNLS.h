@@ -1,5 +1,5 @@
-#ifndef PulseChiSqSNNLS_h
-#define PulseChiSqSNNLS_h
+#ifndef RecoLocalCalo_EcalRecAlgos_PulseChiSqSNNLS_h
+#define RecoLocalCalo_EcalRecAlgos_PulseChiSqSNNLS_h
 
 #define EIGEN_NO_DEBUG  // kill throws in eigen code
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes.h"
@@ -7,9 +7,24 @@
 #include <set>
 #include <array>
 
+template <class P>
 class PulseChiSqSNNLS {
 public:
-  typedef BXVector::Index Index;
+  using SampleVector = typename EigenMatrixTypes<P>::SampleVector;
+  using FullSampleVector = typename EigenMatrixTypes<P>::FullSampleVector;
+  using PulseVector = typename EigenMatrixTypes<P>::PulseVector;
+  using BXVector = typename EigenMatrixTypes<P>::BXVector;
+  using SampleGainVector = typename EigenMatrixTypes<P>::SampleGainVector;
+  using SampleMatrix = typename EigenMatrixTypes<P>::SampleMatrix;
+  using FullSampleMatrix = typename EigenMatrixTypes<P>::FullSampleMatrix;
+  using PulseMatrix = typename EigenMatrixTypes<P>::PulseMatrix;
+  using SamplePulseMatrix = typename EigenMatrixTypes<P>::SamplePulseMatrix;
+  using SampleDecompLLT = typename EigenMatrixTypes<P>::SampleDecompLLT;
+  using PulseDecompLDLT = typename EigenMatrixTypes<P>::PulseDecompLDLT;
+  using SingleMatrix = typename EigenMatrixTypes<P>::SingleMatrix;
+  using SingleVector = typename EigenMatrixTypes<P>::SingleVector;
+
+  using Index = typename BXVector::Index;
 
   PulseChiSqSNNLS();
   ~PulseChiSqSNNLS();

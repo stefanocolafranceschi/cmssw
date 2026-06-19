@@ -16,10 +16,12 @@ public:
   ~EcalUncalibRecHitWorkerRunOneDigiBase() override {}
 
   virtual bool run(const edm::Event& evt,
-                   const EcalDigiCollection::const_iterator& digi,
+                   const edm::DataFrameContainer::const_iterator& digi,
                    EcalUncalibratedRecHitCollection& result) = 0;
 
-  void run(const edm::Event& evt, const EcalDigiCollection& digis, EcalUncalibratedRecHitCollection& result) override {
+  void run(const edm::Event& evt,
+           const edm::DataFrameContainer& digis,
+           EcalUncalibratedRecHitCollection& result) override {
     result.reserve(result.size() + digis.size());
     for (auto it = digis.begin(); it != digis.end(); ++it)
       run(evt, it, result);

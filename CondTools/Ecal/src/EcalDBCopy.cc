@@ -15,7 +15,6 @@
 #include "CondFormats/DataRecord/interface/EcalIntercalibErrorsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalGainRatiosRcd.h"
 #include "CondFormats/DataRecord/interface/EcalWeightXtalGroupsRcd.h"
-#include "CondFormats/EcalObjects/interface/EcalTBWeights.h"
 #include "CondFormats/DataRecord/interface/EcalTBWeightsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalLaserAlphasRcd.h"
 #include "CondFormats/EcalObjects/interface/EcalLaserAPDPNRatios.h"

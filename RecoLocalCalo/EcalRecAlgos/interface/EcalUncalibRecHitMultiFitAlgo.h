@@ -12,6 +12,7 @@
 
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS.h"
 
 #include "TMatrixDSym.h"
@@ -19,6 +20,14 @@
 
 class EcalUncalibRecHitMultiFitAlgo {
 public:
+  using SampleVector = typename EigenMatrixTypes<ecalPh1>::SampleVector;
+  using FullSampleVector = typename EigenMatrixTypes<ecalPh1>::FullSampleVector;
+  using BXVector = typename EigenMatrixTypes<ecalPh1>::BXVector;
+  using SampleGainVector = typename EigenMatrixTypes<ecalPh1>::SampleGainVector;
+  using SampleMatrix = typename EigenMatrixTypes<ecalPh1>::SampleMatrix;
+  using FullSampleMatrix = typename EigenMatrixTypes<ecalPh1>::FullSampleMatrix;
+  using SampleMatrixGainArray = typename EigenMatrixTypes<ecalPh1>::SampleMatrixGainArray;
+
   EcalUncalibRecHitMultiFitAlgo();
   ~EcalUncalibRecHitMultiFitAlgo() {}
   EcalUncalibratedRecHit makeRecHit(const EcalDataFrame &dataFrame,
@@ -39,8 +48,8 @@ public:
   void setGainSwitchUseMaxSample(bool b) { _gainSwitchUseMaxSample = b; }
 
 private:
-  PulseChiSqSNNLS _pulsefunc;
-  PulseChiSqSNNLS _pulsefuncSingle;
+  PulseChiSqSNNLS<ecalPh1> _pulsefunc;
+  PulseChiSqSNNLS<ecalPh1> _pulsefuncSingle;
   bool _computeErrors;
   bool _doPrefit;
   double _prefitMaxChiSq;
