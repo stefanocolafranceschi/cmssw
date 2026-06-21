@@ -11,7 +11,7 @@ from SimCalorimetry.EcalSimProducers.esEcalLiteDTUPedestalsProducer_cfi import *
 
 # use only the cpu branch of the switchProducer for now
 from RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHitPh2_cff import *
-ecalUncalibRecHitPhase2 = ecalMultiFitUncalibRecHitPh2.cpu.clone(
+ecalUncalibRecHitPhase2 = ecalMultiFitUncalibRecHitPh2.clone(
     EBdigiCollection = cms.InputTag("simEcalUnsuppressedDigis")
 )
 

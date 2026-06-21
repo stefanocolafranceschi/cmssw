@@ -1,5 +1,4 @@
 import FWCore.ParameterSet.Config as cms
-from HeterogeneousCore.CUDACore.SwitchProducerCUDA import SwitchProducerCUDA
 
 # provides the Phase 2 SampleMask and the Phase 2 SamplesCorrelation
 # all other payloades are not produced
@@ -82,9 +81,7 @@ ecalPh2PulseCovariancesESProducer = cms.ESProducer("EcalPh2PulseCovariancesESPro
 
 # ECAL multifit running on CPU
 from RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHitPh2_cfi import ecalMultiFitUncalibRecHitPh2 as _ecalMultiFitUncalibRecHitPh2
-ecalMultiFitUncalibRecHitPh2 = SwitchProducerCUDA(
-  cpu = _ecalMultiFitUncalibRecHitPh2.clone()
-)
+ecalMultiFitUncalibRecHitPh2 = _ecalMultiFitUncalibRecHitPh2.clone()
 
 ecalMultiFitUncalibRecHitPh2Task = cms.Task(
   # ECAL multifit running on CPU
