@@ -143,18 +143,33 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     std::optional<cms::alpakatools::device_buffer<Device, TimeComputationState[]>> tcStateDevBuf;
   };
 
+    // --- Phase-2 multifit fit configuration ---
+  // (mirrors the CPU EcalUncalibRecHitWorkerMultiFitPh2 / PulseChiSqSNNLS<ecalPh2>)
+  constexpr int kNPulsesPhase2 = static_cast<int>(ecalPh2::kNActiveLHCPeriods);  // activeBXs = {-2,-1,0,1,2}
+  constexpr int kInTimePulseIdxPhase2 = kNPulsesPhase2 / 2;  // bx = ipulse - 2; in-time at index 2
+  // FIXME: the CPU PulseChiSqSNNLS shifts out-of-time pulses by ONE SAMPLE per BX
+  // unit also for Phase 2, where one BX = ecalPh2::kNSamplesPerLHCPeriod = 4 samples.
+  // Mirrored here so that GPU and CPU results can be validated against each other;
+  // change to ecalPh2::kNSamplesPerLHCPeriod once the intended activeBXs
+  // interpretation is confirmed by the Phase-2 reco leads.
+  constexpr int kBxToSampleShiftPhase2 = 1;
+  // in-time pulse alignment: template[0] sits at sample 4, so the template peak
+  // (template[1]) is at sample ecalPh2::kMaxSampleIdx = 5
+  // (CPU: iFullPulseMax = 9 with a full-pulse vector offset of 8)
+  constexpr int kTemplateStartSamplePhase2 = 4;
+  // pulse matrix: 16 samples x 5 pulses (not square as in Phase 1)
+  using SamplePulseMatrixPhase2 = Eigen::Matrix<::ecal::multifit::data_type,
+                                                static_cast<int>(ecalPh2::sampleSize),
+                                                kNPulsesPhase2>;
+
   struct EventDataForScratchDevicePhase2 {
     using SVT = ::ecal::multifit::Ph2::SampleVector::Scalar;
-    using SGVT = ::ecal::multifit::Ph2::SampleGainVector::Scalar;
     using SMT = ::ecal::multifit::Ph2::SampleMatrix::Scalar;
-    using PMT = ::ecal::multifit::Ph2::PulseMatrixType::Scalar;
-    using BXVT = ::ecal::multifit::Ph2::BXVectorType::Scalar;
+    using PMT = SamplePulseMatrixPhase2::Scalar;
 
     static constexpr auto svlength = getLength<::ecal::multifit::Ph2::SampleVector>();
-    static constexpr auto sgvlength = getLength<::ecal::multifit::Ph2::SampleGainVector>();
     static constexpr auto smlength = getLength<::ecal::multifit::Ph2::SampleMatrix>();
-    static constexpr auto pmlength = getLength<::ecal::multifit::Ph2::PulseMatrixType>();
-    static constexpr auto bxvlength = getLength<::ecal::multifit::Ph2::BXVectorType>();
+    static constexpr auto pmlength = getLength<SamplePulseMatrixPhase2>();
 
     // delete the default constructor because alpaka buffers do not have a default constructor
     EventDataForScratchDevicePhase2() = delete;
@@ -163,14 +178,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                                              uint32_t size,
                                              Queue& queue)
         : samplesDevBuf{cms::alpakatools::make_device_buffer<SVT[]>(queue, size * svlength)},
-          gainsNoiseDevBuf{cms::alpakatools::make_device_buffer<SGVT[]>(queue, size * sgvlength)},
           noisecovDevBuf{cms::alpakatools::make_device_buffer<SMT[]>(queue, size * smlength)},
           pulse_matrixDevBuf{cms::alpakatools::make_device_buffer<PMT[]>(queue, size * pmlength)},
-          activeBXsDevBuf{cms::alpakatools::make_device_buffer<BXVT[]>(queue, size * bxvlength)},
-          acStateDevBuf{cms::alpakatools::make_device_buffer<char[]>(queue, size)},
-          hasSwitchToGain1DevBuf{cms::alpakatools::make_device_buffer<bool[]>(queue, size)},
-          isSaturatedDevBuf{cms::alpakatools::make_device_buffer<bool[]>(queue, size)} {
+          acStateDevBuf{cms::alpakatools::make_device_buffer<char[]>(queue, size)} {
       if (configParameters.shouldRunTimingComputation) {
+        // Phase-2 GPU timing is not implemented yet; buffers kept for later use
         sample_valuesDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size * svlength);
         sample_value_errorsDevBuf = cms::alpakatools::make_device_buffer<SVT[]>(queue, size * svlength);
         useless_sample_valuesDevBuf =
@@ -193,15 +205,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     };
 
     cms::alpakatools::device_buffer<Device, SVT[]> samplesDevBuf;
-    cms::alpakatools::device_buffer<Device, SGVT[]> gainsNoiseDevBuf;
-
     cms::alpakatools::device_buffer<Device, SMT[]> noisecovDevBuf;
     cms::alpakatools::device_buffer<Device, PMT[]> pulse_matrixDevBuf;
-    cms::alpakatools::device_buffer<Device, BXVT[]> activeBXsDevBuf;
     cms::alpakatools::device_buffer<Device, char[]> acStateDevBuf;
-
-    cms::alpakatools::device_buffer<Device, bool[]> hasSwitchToGain1DevBuf;
-    cms::alpakatools::device_buffer<Device, bool[]> isSaturatedDevBuf;
 
     std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> sample_valuesDevBuf;
     std::optional<cms::alpakatools::device_buffer<Device, SVT[]>> sample_value_errorsDevBuf;

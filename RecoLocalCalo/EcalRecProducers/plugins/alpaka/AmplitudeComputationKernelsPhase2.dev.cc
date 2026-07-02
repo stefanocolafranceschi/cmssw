@@ -2,7 +2,7 @@
 #include <limits>
 #include <alpaka/alpaka.hpp>
 
-#include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
+#include "CondFormats/EcalObjects/interface/EcalPulseCovarianceT.h"
 #include "DataFormats/CaloRecHit/interface/MultifitComputations.h"
 #include "FWCore/Utilities/interface/CMSUnrollLoop.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
@@ -15,30 +15,41 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
   using namespace ::ecal::multifit::Ph2;
 
-  template <typename MatrixType>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE void update_covariance(EcalPulseCovariance const& pulse_covariance,
+  // Add the pulse-shape covariance contribution of every active pulse to the
+  // noise covariance. Mirrors PulseChiSqSNNLS<ecalPh2>::updateCov, with the
+  // 32x32 zero-padded full-pulse covariance replaced by direct, bounds-guarded
+  // access to the 16x16 EcalPh2PulseCovariance template:
+  //   template index = sample - shift, shift = kTemplateStartSamplePhase2 +
+  //   kBxToSampleShiftPhase2 * bx, bx = ipulse - kInTimePulseIdxPhase2.
+  template <typename MatrixType, typename AmplitudeVectorType>
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE void update_covariance(EcalPh2PulseCovariance const& pulse_covariance,
                                                         MatrixType& inverse_cov,
-                                                        SampleVector const& amplitudes) {
-    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
-    constexpr auto npulses = BXVectorType::RowsAtCompileTime;
+                                                        AmplitudeVectorType const& amplitudes) {
+    constexpr int nsamples = SampleVector::RowsAtCompileTime;
+    constexpr int npulses = kNPulsesPhase2;
+    constexpr int tsamples = EcalPh2PulseCovariance::TEMPLATESAMPLES;
 
     CMS_UNROLL_LOOP
-    for (unsigned int ipulse = 0; ipulse < npulses; ++ipulse) {
+    for (int ipulse = 0; ipulse < npulses; ++ipulse) {
       auto const amplitude = amplitudes.coeff(ipulse);
       if (amplitude == 0)
         continue;
 
-      // FIXME: offset is different for Phase 2
-      // ipulse - 5 -> ipulse - firstOffset
-      int bx = ipulse - 5;
-      int first_sample_t = std::max(0, bx + 3);
-      int offset = -3 - bx;
+      int const bx = ipulse - kInTimePulseIdxPhase2;
+      int const shift = kTemplateStartSamplePhase2 + kBxToSampleShiftPhase2 * bx;
+      int const first_sample_t = std::max(0, shift);
 
       auto const value_sq = amplitude * amplitude;
 
       for (int col = first_sample_t; col < nsamples; ++col) {
+        int const tc = col - shift;
+        if (tc < 0 || tc >= tsamples)
+          continue;
         for (int row = col; row < nsamples; ++row) {
-          inverse_cov(row, col) += value_sq * pulse_covariance.covval[row + offset][col + offset];
+          int const tr = row - shift;
+          if (tr >= tsamples)
+            break;
+          inverse_cov(row, col) += value_sq * pulse_covariance.covval[tr][tc];
         }
       }
     }
@@ -46,7 +57,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
   ///
   /// launch ctx parameters are (nchannels / block, blocks)
-  /// TODO: trivial impl for now, there must be a way to improve
+  ///
+  /// Phase-2 minimization: 16 samples, kNPulsesPhase2 (=5) pulses with
+  /// activeBXs = {-2,-1,0,1,2}; in-time amplitude at index kInTimePulseIdxPhase2.
   ///
   /// Conventions:
   ///   - amplitudes -> solution vector, what we are fitting for
@@ -59,29 +72,30 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
                                   InputProduct::ConstView const& digisDevEB,
                                   OutputProduct::View uncalibRecHitsEB,
-                                  EcalMultifitConditionsDevice::ConstView conditionsDev,
+                                  EcalMultifitConditionsPhase2Device::ConstView conditionsDev,
                                   ::ecal::multifit::Ph2::SampleMatrix const* noisecov,
-                                  ::ecal::multifit::Ph2::PulseMatrixType const* pulse_matrix,
-                                  ::ecal::multifit::Ph2::BXVectorType* bxs,
+                                  SamplePulseMatrixPhase2 const* pulse_matrix,
                                   ::ecal::multifit::Ph2::SampleVector const* samples,
-                                  bool* hasSwitchToGain1,
-                                  bool* isSaturated,
                                   char* acState,
                                   int max_iterations) const {
-      // FIXME: ecal has 16 samples and x pulses....
-      // this needs to be properly treated and renamed everywhere
-      constexpr auto NSAMPLES = SampleMatrix::RowsAtCompileTime;
-      constexpr auto NPULSES = SampleMatrix::ColsAtCompileTime;
-      static_assert(NSAMPLES == NPULSES);
+      constexpr int NSAMPLES = SampleMatrix::RowsAtCompileTime;
+      constexpr int NPULSES = kNPulsesPhase2;
+      static_assert(NPULSES <= NSAMPLES);
 
       using DataType = SampleVector::Scalar;
+
+      // shared memory layout per element: one NSAMPLES symmetric matrix (noise
+      // covariance, later reused as the fnnls decomposition) + one NPULSES
+      // symmetric matrix (AtA)
+      constexpr auto covTotal = calo::multifit::MapSymM<DataType, NSAMPLES>::total;
+      constexpr auto pulTotal = calo::multifit::MapSymM<DataType, NPULSES>::total;
 
       auto const elemsPerBlock(alpaka::getWorkDiv<alpaka::Block, alpaka::Elems>(acc)[0u]);
 
       auto const nchannels = digisDevEB.size();
 
       auto const* pulse_covariance =
-          reinterpret_cast<const EcalPulseCovariance*>(conditionsDev.pulseCovariance().data());
+          reinterpret_cast<const EcalPh2PulseCovariance*>(conditionsDev.pulseCovariance().data());
 
       // shared memory
       DataType* shrmem = alpaka::getDynSharedMem<DataType>(acc);
@@ -94,9 +108,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
         auto const elemIdx = idx % elemsPerBlock;
 
         // shared memory pointers
-        DataType* shrMatrixLForFnnlsStorage = shrmem + calo::multifit::MapSymM<DataType, NPULSES>::total * elemIdx;
-        DataType* shrAtAStorage =
-            shrmem + calo::multifit::MapSymM<DataType, NPULSES>::total * (elemIdx + elemsPerBlock);
+        DataType* shrCovStorage = shrmem + (covTotal + pulTotal) * elemIdx;
+        DataType* shrAtAStorage = shrCovStorage + covTotal;
+        // the fnnls L matrix reuses the covariance storage (no longer needed there)
+        DataType* shrMatrixLForFnnlsStorage = shrCovStorage;
 
         auto* amplitudes = uncalibRecHitsEB.outOfTimeAmplitudes().data();
         auto energies = uncalibRecHitsEB.amplitude();
@@ -120,17 +135,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
         for (int counter = 0; counter < NPULSES; ++counter)
           resultAmplitudes(counter) = 0;
 
-        // inits
-        //SampleDecompLLT covariance_decomposition;
-        //SampleMatrix inverse_cov;
-        //        SampleVector::Scalar chi2 = 0, chi2_now = 0;
         float chi2 = 0, chi2_now = 0;
 
         // loop for up to max_iterations
         for (int iter = 0; iter < max_iterations; ++iter) {
-          //inverse_cov = noisecov[idx];
-          //DataType covMatrixStorage[MapSymM<DataType, NSAMPLES>::total];
-          DataType* covMatrixStorage = shrMatrixLForFnnlsStorage;
+          DataType* covMatrixStorage = shrCovStorage;
           calo::multifit::MapSymM<DataType, NSAMPLES> covMatrix{covMatrixStorage};
           int counter = 0;
           CMS_UNROLL_LOOP
@@ -143,9 +152,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
           update_covariance(pulse_covariance[hashedId], covMatrix, resultAmplitudes);
 
           // compute actual covariance decomposition
-          //covariance_decomposition.compute(inverse_cov);
-          //auto const& matrixL = covariance_decomposition.matrixL();
-          DataType matrixLStorage[calo::multifit::MapSymM<DataType, NSAMPLES>::total];
+          DataType matrixLStorage[covTotal];
           calo::multifit::MapSymM<DataType, NSAMPLES> matrixL{matrixLStorage};
           calo::multifit::compute_decomposition_unrolled(matrixL, covMatrix);
 
@@ -157,11 +164,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
           float reg_b[NSAMPLES];
           calo::multifit::solve_forward_subst_vector(reg_b, samples[idx], matrixL);
 
-          // FIXME: shared mem
-          //DataType AtAStorage[MapSymM<DataType, NPULSES>::total];
           calo::multifit::MapSymM<DataType, NPULSES> AtA{shrAtAStorage};
-          //SampleMatrix AtA;
-          SampleVector Atb;
+          calo::multifit::ColumnVector<NPULSES, DataType> Atb;
           CMS_UNROLL_LOOP
           for (int icol = 0; icol < NPULSES; ++icol) {
             float reg_ai[NSAMPLES];
@@ -171,7 +175,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
             for (int counter = 0; counter < NSAMPLES; ++counter)
               reg_ai[counter] = A(counter, icol);
 
-            // compute diagoanl
+            // compute diagonal
             float sum = 0.f;
             CMS_UNROLL_LOOP
             for (int counter = 0; counter < NSAMPLES; ++counter)
@@ -196,7 +200,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                 sum += reg_aj[counter] * reg_ai[counter];
 
               // store
-              //AtA(icol, j) = sum;
               AtA(j, icol) = sum;
             }
 
@@ -210,13 +213,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
             Atb(icol) = sum_atb;
           }
 
-          // FIXME: shared mem
-          //DataType matrixLForFnnlsStorage[MapSymM<DataType, NPULSES>::total];
           calo::multifit::MapSymM<DataType, NPULSES> matrixLForFnnls{shrMatrixLForFnnlsStorage};
 
           calo::multifit::fnnls(AtA,
                                 Atb,
-                                //amplitudes[idx],
                                 resultAmplitudes,
                                 npassive,
                                 pulseOffsets,
@@ -236,15 +236,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
         }
 
         // store to global output values
-        // FIXME: amplitudes are used in global directly
         chi2s[idx] = chi2;
-        energies[idx] = resultAmplitudes(5);
+        energies[idx] = resultAmplitudes(kInTimePulseIdxPhase2);
 
+        // out-of-time amplitudes are stored at slot bx + 5 as in the CPU version
+        // (slots 3..7 of the ecalPh1::sampleSize-entry data-format array)
         CMS_UNROLL_LOOP
-        // FIXME (Phase 2): outOfTimeAmplitudes holds ecalPh1::sampleSize entries
-        for (int counter = 0; counter < NPULSES && counter < static_cast<int>(ecalPh1::sampleSize);
-             ++counter)
-          amplitudes[idx][counter] = resultAmplitudes(counter);
+        for (int counter = 0; counter < NPULSES; ++counter) {
+          int const slot = (counter - kInTimePulseIdxPhase2) + 5;
+          amplitudes[idx][slot] = resultAmplitudes(counter);
+        }
       }
     }
   };
@@ -253,10 +254,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                               InputProduct const& digisDevEB,
                               OutputProduct& uncalibRecHitsDevEB,
                               EventDataForScratchDevicePhase2& scratch,
-                              EcalMultifitConditionsDevice const& conditionsDev,
+                              EcalMultifitConditionsPhase2Device const& conditionsDev,
                               ConfigurationParametersPhase2 const& configParams,
                               uint32_t const totalChannels) {
-    using DataType = SampleVector::Scalar;
     // TODO: configure from python
     auto threads_min = configParams.kernelMinimizeThreads[0];
     auto blocks_min = cms::alpakatools::divide_up_by(totalChannels, threads_min);
@@ -269,11 +269,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                         uncalibRecHitsDevEB.view(),
                         conditionsDev.const_view(),
                         reinterpret_cast<::ecal::multifit::Ph2::SampleMatrix*>(scratch.noisecovDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::Ph2::PulseMatrixType*>(scratch.pulse_matrixDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::Ph2::BXVectorType*>(scratch.activeBXsDevBuf.data()),
+                        reinterpret_cast<SamplePulseMatrixPhase2*>(scratch.pulse_matrixDevBuf.data()),
                         reinterpret_cast<::ecal::multifit::Ph2::SampleVector*>(scratch.samplesDevBuf.data()),
-                        scratch.hasSwitchToGain1DevBuf.data(),
-                        scratch.isSaturatedDevBuf.data(),
                         scratch.acStateDevBuf.data(),
                         50);  // maximum number of fit iterations
   }
@@ -295,11 +292,11 @@ namespace alpaka::trait {
                                                                  TArgs const&...) -> std::size_t {
       using ScalarType = ::ecal::multifit::Ph2::SampleVector::Scalar;
 
-      // return the amount of dynamic shared memory needed
-      std::size_t bytes =
-          2 * threadsPerBlock[0u] * elemsPerThread[0u] *
-          calo::multifit::MapSymM<ScalarType, ::ecal::multifit::Ph2::SampleVector::RowsAtCompileTime>::total *
-          sizeof(ScalarType);
+      // one NSAMPLES symmetric matrix + one NPULSES symmetric matrix per element
+      constexpr auto covTotal =
+          calo::multifit::MapSymM<ScalarType, ::ecal::multifit::Ph2::SampleVector::RowsAtCompileTime>::total;
+      constexpr auto pulTotal = calo::multifit::MapSymM<ScalarType, kNPulsesPhase2>::total;
+      std::size_t bytes = threadsPerBlock[0u] * elemsPerThread[0u] * (covTotal + pulTotal) * sizeof(ScalarType);
       return bytes;
     }
   };

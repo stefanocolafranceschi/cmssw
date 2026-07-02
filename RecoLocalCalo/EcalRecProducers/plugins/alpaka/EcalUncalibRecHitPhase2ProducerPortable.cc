@@ -1,5 +1,5 @@
-#include "CondFormats/DataRecord/interface/EcalMultifitConditionsRcd.h"
-#include "CondFormats/EcalObjects/interface/alpaka/EcalMultifitConditionsDevice.h"
+#include "CondFormats/DataRecord/interface/EcalMultifitConditionsPhase2Rcd.h"
+#include "CondFormats/EcalObjects/interface/alpaka/EcalMultifitConditionsPhase2Device.h"
 #include "DataFormats/EcalDigi/interface/alpaka/EcalDigiPhase2DeviceCollection.h"
 #include "DataFormats/EcalRecHit/interface/alpaka/EcalUncalibratedRecHitDeviceCollection.h"
 #include "DataFormats/Portable/interface/PortableObject.h"
@@ -45,7 +45,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     const device::EDPutToken<OutputProduct> uncalibRecHitsTokenEB_;
 
     // conditions tokens
-    const device::ESGetToken<EcalMultifitConditionsDevice, EcalMultifitConditionsRcd> multifitConditionsToken_;
+    const device::ESGetToken<EcalMultifitConditionsPhase2Device, EcalMultifitConditionsPhase2Rcd> multifitConditionsToken_;
 
     // configuration parameters
     ecal::multifit::ConfigurationParametersPhase2 configParameters_;
@@ -82,7 +82,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     desc.add<std::vector<double>>("EBamplitudeFitParameters", {1.138, 1.652});
 
     desc.addUntracked<std::vector<uint32_t>>("kernelMinimizeThreads", {32, 1, 1});
-    desc.add<bool>("shouldRunTimingComputation", true);
+    desc.add<bool>("shouldRunTimingComputation", false);
 
     confDesc.addWithDefaultLabel(desc);
   }

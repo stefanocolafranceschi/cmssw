@@ -5,12 +5,12 @@
 #include <limits>
 #include <alpaka/alpaka.hpp>
 
-#include "CondFormats/EcalObjects/interface/alpaka/EcalMultifitConditionsDevice.h"
+#include "CondFormats/EcalObjects/interface/alpaka/EcalMultifitConditionsPhase2Device.h"
 #include "DataFormats/EcalDigi/interface/alpaka/EcalDigiPhase2DeviceCollection.h"
 #include "DataFormats/EcalRecHit/interface/alpaka/EcalUncalibratedRecHitDeviceCollection.h"
-#include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
+#include "DataFormats/EcalDigi/interface/EcalConstants.h"
 #include "DataFormats/EcalDigi/interface/EcalDataFrame_Ph2.h"
-#include "DataFormats/EcalDigi/interface/EcalMGPASample.h"
+#include "DataFormats/EcalDigi/interface/EcalLiteDTUSample.h"
 #include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
 #include "FWCore/Utilities/interface/CMSUnrollLoop.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
@@ -21,280 +21,164 @@
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
+  // Phase-2 preparation kernels.
+  //
+  // CATIA 2-gain LiteDTU decode; no gain-switch noise machinery, mirroring the
+  // CPU EcalUncalibRecHitMultiFitAlgoPh2 where hasGainSwitch is always false.
+  // Saturation handling mirrors EcalUncalibRecHitWorkerMultiFitPh2:
+  //  - saturation (gain 1 and ADC at max) on the expected max sample
+  //    -> amplitude = MAXADC * gain10, flagged kSaturated, no fit;
+  //  - saturation on any other sample -> max-sample amplitude, kSaturated, no fit.
+
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE ::ecal::multifit::Ph2::SampleVector::Scalar decodeSample(
+      EcalMultifitConditionsPhase2Device::ConstView const& conditionsDev,
+      uint16_t const digiSample,
+      uint32_t const hashedId,
+      ::ecal::multifit::Ph2::SampleVector::Scalar& pedestal) {
+    using DataType = ::ecal::multifit::Ph2::SampleVector::Scalar;
+    auto const adc = ecalLiteDTU::adc(digiSample);
+    auto const gainId = ecalLiteDTU::gainId(digiSample);
+
+    DataType gainratio;
+    if (gainId == static_cast<int>(ecalPh2::gainId1)) {
+      pedestal = conditionsDev.pedestals_mean_g1()[hashedId];
+      gainratio = conditionsDev.gain10Over1()[hashedId];
+    } else {
+      pedestal = conditionsDev.pedestals_mean_g10()[hashedId];
+      gainratio = 1.;
+    }
+
+    // amplitudes on the gain-10 scale
+    // NOTE: the CPU EcalUncalibRecHitMultiFitAlgoPh2 multiplies ALL samples by the
+    // gain ratio (also gain-10 ones); here the ratio is applied only to gain-1
+    // samples, consistently with the worker's saturation path and with the Phase-2
+    // weights reconstruction. To be confirmed with the reco leads.
+    return (static_cast<DataType>(adc) - pedestal) * gainratio;
+  }
+
   ///
   /// assume kernel launch configuration is
   /// (MAXSAMPLES * nchannels, blocks)
-  /// TODO: is there a point to split this kernel further to separate reductions
   ///
   class Kernel_prep_1d_and_initialize {
   public:
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
                                   EcalDigiPhase2DeviceCollection::ConstView digisDevEB,
                                   EcalUncalibratedRecHitDeviceCollection::View uncalibRecHitsEB,
-                                  EcalMultifitConditionsDevice::ConstView conditionsDev,
-                                  ::ecal::multifit::Ph2::SampleVector* amplitudes,
-                                  ::ecal::multifit::Ph2::SampleGainVector* gainsNoise,
-                                  bool* hasSwitchToGain1,
-                                  bool* isSaturated,
-                                  char* acState,
-                                  ::ecal::multifit::Ph2::BXVectorType* bxs,
-                                  bool const gainSwitchUseMaxSampleEB) const {
-      constexpr bool dynamicPedestal = false;  //---- default to false, ok
-      constexpr auto nsamples = EcalDataFrame_Ph2::MAXSAMPLES;
-      constexpr int sample_max = 5;
-      constexpr int full_pulse_max = 9;
+                                  EcalMultifitConditionsPhase2Device::ConstView conditionsDev,
+                                  ::ecal::multifit::Ph2::SampleVector* amplitudesForFit,
+                                  char* acState) const {
+      using DataType = ::ecal::multifit::Ph2::SampleVector::Scalar;
+      constexpr auto nsamples = static_cast<int>(EcalDataFrame_Ph2::MAXSAMPLES);
+      constexpr int sampleMax = static_cast<int>(ecalPh2::kMaxSampleIdx);
 
       auto const nchannels = digisDevEB.size();
       auto const totalElements = nchannels * nsamples;
 
-      auto const elemsPerBlock = alpaka::getWorkDiv<alpaka::Block, alpaka::Elems>(acc)[0u];
+      auto const* digis_in = digisDevEB.data().data()->data();
+      auto const dids = digisDevEB.id();
 
-      char* shared_mem = alpaka::getDynSharedMem<char>(acc);
-      auto* shr_hasSwitchToGain1 = reinterpret_cast<bool*>(shared_mem);
-      auto* shr_hasSwitchToGain0 = shr_hasSwitchToGain1 + elemsPerBlock;
-      auto* shr_isSaturated = shr_hasSwitchToGain0 + elemsPerBlock;
-      auto* shr_hasSwitchToGain0_tmp = shr_isSaturated + elemsPerBlock;
-      auto* shr_counts = reinterpret_cast<char*>(shr_hasSwitchToGain0_tmp) + elemsPerBlock;
+      // shared memory: per-sample saturation flags
+      bool* shr_isSaturatedSample = alpaka::getDynSharedMem<bool>(acc);
 
       for (auto block : cms::alpakatools::uniform_groups(acc, totalElements)) {
+        // phase A: per-sample decode and initialization
         for (auto idx : cms::alpakatools::uniform_group_elements(acc, block, totalElements)) {
-          // set the output collection size scalars
+          // set the output collection size scalar
           if (idx.global == 0) {
             uncalibRecHitsEB.size() = nchannels;
           }
 
-          // for accessing input arrays
-          int const inputTx = idx.global;
-          auto const* digis_in = digisDevEB.data().data()->data();
-          auto const gainId = ecalMGPA::gainId(digis_in[inputTx]);
-
-          // store into shared mem for initialization
-          shr_hasSwitchToGain1[idx.local] = gainId == EcalMgpaBitwiseGain1;
-          shr_hasSwitchToGain0_tmp[idx.local] = gainId == EcalMgpaBitwiseGain0;
-          shr_hasSwitchToGain0[idx.local] = shr_hasSwitchToGain0_tmp[idx.local];
-          shr_counts[idx.local] = 0;
-        }
-
-        alpaka::syncBlockThreads(acc);
-
-        for (auto idx : cms::alpakatools::uniform_group_elements(acc, block, totalElements)) {
-          auto const sample = idx.local % nsamples;
-
-          // non-divergent branch (except for the last 4 threads)
-          if (idx.local <= elemsPerBlock - 5) {
-            CMS_UNROLL_LOOP
-            for (int i = 0; i < 5; ++i)
-              shr_counts[idx.local] += shr_hasSwitchToGain0[idx.local + i];
-          }
-          shr_isSaturated[idx.local] = shr_counts[idx.local] == 5;
-
-          //
-          // unrolled reductions
-          //
-          if (sample < 5) {
-            shr_hasSwitchToGain1[idx.local] = shr_hasSwitchToGain1[idx.local] || shr_hasSwitchToGain1[idx.local + 5];
-
-            // duplication of hasSwitchToGain0 in order not to
-            // introduce another syncthreads
-            shr_hasSwitchToGain0_tmp[idx.local] =
-                shr_hasSwitchToGain0_tmp[idx.local] || shr_hasSwitchToGain0_tmp[idx.local + 5];
-          }
-        }
-
-        alpaka::syncBlockThreads(acc);
-
-        for (auto idx : cms::alpakatools::uniform_group_elements(acc, block, totalElements)) {
-          auto const sample = idx.local % nsamples;
-
-          if (sample < 2) {
-            // note, both threads per channel take value [3] twice to avoid another if
-            shr_hasSwitchToGain1[idx.local] = shr_hasSwitchToGain1[idx.local] || shr_hasSwitchToGain1[idx.local + 2] ||
-                                              shr_hasSwitchToGain1[idx.local + 3];
-
-            shr_hasSwitchToGain0_tmp[idx.local] = shr_hasSwitchToGain0_tmp[idx.local] ||
-                                                  shr_hasSwitchToGain0_tmp[idx.local + 2] ||
-                                                  shr_hasSwitchToGain0_tmp[idx.local + 3];
-
-            // sample < 2 -> first 2 threads of each channel will be used here
-            // => 0 -> will compare 3 and 4 and put into 0
-            // => 1 -> will compare 4 and 5 and put into 1
-            shr_isSaturated[idx.local] = shr_isSaturated[idx.local + 3] || shr_isSaturated[idx.local + 4];
-          }
-        }
-
-        alpaka::syncBlockThreads(acc);
-
-        for (auto idx : cms::alpakatools::uniform_group_elements(acc, block, totalElements)) {
           auto const ch = idx.global / nsamples;
-          auto const sample = idx.local % nsamples;
-
-          if (sample == 0) {
-            shr_hasSwitchToGain1[idx.local] = shr_hasSwitchToGain1[idx.local] || shr_hasSwitchToGain1[idx.local + 1];
-            shr_hasSwitchToGain0_tmp[idx.local] =
-                shr_hasSwitchToGain0_tmp[idx.local] || shr_hasSwitchToGain0_tmp[idx.local + 1];
-
-            hasSwitchToGain1[ch] = shr_hasSwitchToGain1[idx.local];
-
-            shr_isSaturated[idx.local + 3] = shr_isSaturated[idx.local] || shr_isSaturated[idx.local + 1];
-            isSaturated[ch] = shr_isSaturated[idx.local + 3];
-          }
-        }
-
-        // TODO: w/o this sync, there is a race
-        // if (idx.local == sample_max) below uses max sample thread, not for 0 sample
-        // check if we can remove it
-        alpaka::syncBlockThreads(acc);
-
-        for (auto idx : cms::alpakatools::uniform_group_elements(acc, block, totalElements)) {
-          auto const ch = idx.global / nsamples;
-          auto const sample = idx.local % nsamples;
-
-          // for accessing input arrays
+          auto const sample = static_cast<int>(idx.global % nsamples);
           int const inputCh = ch;
           int const inputTx = idx.global;
 
-          auto const dids = digisDevEB.id();
           auto const did = DetId{dids[inputCh]};
           auto const hashedId = reconstruction::hashedIndexEB(did.rawId());
 
-          // eb is first and then ee
-          auto const* digis_in = digisDevEB.data().data()->data();
+          DataType pedestal;
+          auto const amplitude = decodeSample(conditionsDev, digis_in[inputTx], hashedId, pedestal);
+          amplitudesForFit[ch](sample) = amplitude;
 
-          auto* amplitudesForMinimization =
-              uncalibRecHitsEB.outOfTimeAmplitudes().data();
+          // per-sample saturation criterion (CPU worker: gain 1 and ADC at max range)
+          auto const gainId = ecalLiteDTU::gainId(digis_in[inputTx]);
+          auto const adc = ecalLiteDTU::adc(digis_in[inputTx]);
+          shr_isSaturatedSample[idx.local] = (gainId == static_cast<int>(ecalPh2::gainId1)) &&
+                                             (adc == static_cast<int>(ecalPh2::MAXADC));
+
+          // zero the stored out-of-time amplitudes
+          // FIXME (Phase 2): the data-format array holds ecalPh1::sampleSize entries
+          if (sample < static_cast<int>(ecalPh1::sampleSize))
+            uncalibRecHitsEB.outOfTimeAmplitudes().data()[inputCh][sample] = 0.;
+        }
+
+        alpaka::syncBlockThreads(acc);
+
+        // phase B: one thread per channel finalizes the initialization
+        for (auto idx : cms::alpakatools::uniform_group_elements(acc, block, totalElements)) {
+          auto const ch = idx.global / nsamples;
+          auto const sample = static_cast<int>(idx.global % nsamples);
+
+          if (sample != sampleMax)
+            continue;
+
+          int const inputCh = ch;
+          int const inputTx = idx.global;
+          auto const chStart = idx.local - sampleMax;
+
+          auto const did = DetId{dids[inputCh]};
+          auto const hashedId = reconstruction::hashedIndexEB(did.rawId());
+
+          // re-decode this thread's (max) sample for pedestal and amplitude
+          DataType pedestal;
+          auto const maxSampleAmplitude = decodeSample(conditionsDev, digis_in[inputTx], hashedId, pedestal);
+
+          // mirror the CPU worker's lastSampleBeforeSaturation scan
+          int lastSampleBeforeSaturation = -2;
+          for (int iSample = 0; iSample < nsamples; ++iSample) {
+            if (shr_isSaturatedSample[chStart + iSample]) {
+              lastSampleBeforeSaturation = iSample - 1;
+              break;
+            }
+          }
+
           auto energies = uncalibRecHitsEB.amplitude();
-          auto chi2 = uncalibRecHitsEB.chi2();
+          auto amplitudeErrors = uncalibRecHitsEB.amplitudeError();
+          auto chi2s = uncalibRecHitsEB.chi2();
+          auto ootChi2s = uncalibRecHitsEB.OOTchi2();
           auto g_pedestal = uncalibRecHitsEB.pedestal();
+          auto jitters = uncalibRecHitsEB.jitter();
+          auto jitterErrors = uncalibRecHitsEB.jitterError();
           auto dids_out = uncalibRecHitsEB.id();
           auto flags = uncalibRecHitsEB.flags();
+          auto auxs = uncalibRecHitsEB.aux();
 
-          auto const adc = ecalMGPA::adc(digis_in[inputTx]);
-          auto const gainId = ecalMGPA::gainId(digis_in[inputTx]);
-          ::ecal::multifit::Ph2::SampleVector::Scalar amplitude = 0.;
-          ::ecal::multifit::Ph2::SampleVector::Scalar pedestal = 0.;
-          ::ecal::multifit::Ph2::SampleVector::Scalar gainratio = 0.;
+          dids_out[inputCh] = did.rawId();
+          g_pedestal[inputCh] = pedestal;  // pedestal of the max sample (CPU pedval)
+          amplitudeErrors[inputCh] = 0.;
+          chi2s[inputCh] = 0.;
+          ootChi2s[inputCh] = 0.;
+          jitters[inputCh] = 0.;  // timing computation deferred for Phase 2
+          jitterErrors[inputCh] = 0.;
+          auxs[inputCh] = 0;
 
-          // TODO: divergent branch
-          if (gainId == 0 || gainId == 3) {
-            pedestal = conditionsDev.pedestals_mean_x1()[hashedId];
-            gainratio = conditionsDev.gain6Over1()[hashedId] * conditionsDev.gain12Over6()[hashedId];
-            gainsNoise[ch](sample) = 2;
-          } else if (gainId == 1) {
-            pedestal = conditionsDev.pedestals_mean_x12()[hashedId];
-            gainratio = 1.;
-            gainsNoise[ch](sample) = 0;
-          } else if (gainId == 2) {
-            pedestal = conditionsDev.pedestals_mean_x6()[hashedId];
-            gainratio = conditionsDev.gain12Over6()[hashedId];
-            gainsNoise[ch](sample) = 1;
-          }
-
-          // TODO: compile time constant -> branch should be non-divergent
-          if (dynamicPedestal)
-            amplitude = static_cast<::ecal::multifit::Ph2::SampleVector::Scalar>(adc) * gainratio;
-          else
-            amplitude = (static_cast<::ecal::multifit::Ph2::SampleVector::Scalar>(adc) - pedestal) * gainratio;
-          amplitudes[ch][sample] = amplitude;
-
-#ifdef ECAL_RECO_ALPAKA_DEBUG
-          printf("%d %d %d %d %f %f %f\n", idx.global, ch, sample, adc, amplitude, pedestal, gainratio);
-          if (adc == 0)
-            printf("adc is zero\n");
-#endif
-
-          //
-          // initialization
-          //
-          // FIXME (Phase 2): outOfTimeAmplitudes holds ecalPh1::sampleSize entries
-          // per channel until the data format is revised; write bounded.
-          if (sample < static_cast<int>(ecalPh1::sampleSize))
-            amplitudesForMinimization[inputCh][sample] = 0;
-          bxs[ch](sample) = sample - 5;
-
-          // select the thread for the max sample
-          //---> hardcoded above to be 5th sample, ok
-          if (sample == sample_max) {
-            //
-            // initialization
-            //
+          uint32_t flag = 0;
+          if (lastSampleBeforeSaturation == sampleMax - 1) {
+            // saturation on the expected max sample: amplitude at the ADC maximum
+            energies[inputCh] = static_cast<float>(ecalPh2::MAXADC) * ecalPh2::gains[ecalPh2::gainId10];
+            flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;
+            acState[ch] = static_cast<char>(MinimizationState::Precomputed);
+          } else if (lastSampleBeforeSaturation >= -1) {
+            // saturation elsewhere: use the max-sample amplitude, no extrapolation
+            energies[inputCh] = maxSampleAmplitude;
+            flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;
+            acState[ch] = static_cast<char>(MinimizationState::Precomputed);
+          } else {
+            energies[inputCh] = 0.;
             acState[ch] = static_cast<char>(MinimizationState::NotFinished);
-            energies[inputCh] = 0;
-            chi2[inputCh] = 0;
-            g_pedestal[inputCh] = 0;
-            uint32_t flag = 0;
-            dids_out[inputCh] = did.rawId();
-
-            // start of this channel in shared mem
-            auto const chStart = idx.local - sample_max;
-            // thread for the max sample in shared mem
-            auto const threadMax = idx.local;
-            auto const gainSwitchUseMaxSample = gainSwitchUseMaxSampleEB;
-
-            // this flag setting is applied to all of the cases
-            if (shr_hasSwitchToGain1[chStart])
-              flag |= 0x1 << EcalUncalibratedRecHit::kHasSwitchToGain1;
-
-            // this corresponds to cpu branching on lastSampleBeforeSaturation
-            // likely false
-            // check only for the idx.local corresponding to sample==0
-            if (sample == 0 && shr_hasSwitchToGain0_tmp[idx.local]) {
-              // assign for the case some sample having gainId == 0
-              //energies[inputCh] = amplitudes[ch][sample_max];
-              energies[inputCh] = amplitude;
-
-              // check if samples before sample_max have true
-              bool saturated_before_max = false;
-              CMS_UNROLL_LOOP
-              for (char ii = 0; ii < 5; ++ii)
-                saturated_before_max = saturated_before_max || shr_hasSwitchToGain0[chStart + ii];
-
-              // if saturation is in the max sample and not in the first 5
-              if (!saturated_before_max && shr_hasSwitchToGain0[threadMax])
-                energies[inputCh] = 49140;  // 4095 * 12 (maximum ADC range * MultiGainPreAmplifier (MGPA) gain)
-                                            // This is the actual maximum range that is set when we saturate.
-                                            //---- AM FIXME : no pedestal subtraction???
-                                            //It should be "(4095. - pedestal) * gainratio"
-
-              // set state flag to terminate further processing of this channel
-              acState[ch] = static_cast<char>(MinimizationState::Precomputed);
-              flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;
-              flags[inputCh] = flag;
-              continue;
-            }
-
-            // according to cpu version
-            //            auto max_amplitude = amplitudes[ch][sample_max];
-            auto const max_amplitude = amplitude;
-            // pulse shape template value
-            auto shape_value = conditionsDev.pulseShapes()[hashedId][full_pulse_max - 7];
-            // note, no syncing as the same thread will be accessing here
-            bool hasGainSwitch = shr_hasSwitchToGain1[chStart] || shr_isSaturated[chStart + 3];
-
-            // pedestal is final unconditionally
-            g_pedestal[inputCh] = pedestal;
-            if (hasGainSwitch && gainSwitchUseMaxSample) {
-              // thread for sample=0 will access the right guys
-              energies[inputCh] = max_amplitude / shape_value;
-              acState[ch] = static_cast<char>(MinimizationState::Precomputed);
-              flags[inputCh] = flag;
-              continue;
-            }
-
-            // will be used in the future for setting state
-            auto const rmsForChecking = conditionsDev.pedestals_rms_x12()[hashedId];
-
-            // this happens cause sometimes rms_x12 is 0...
-            // needs to be checkec why this is the case
-            // general case here is that noisecov is a Zero matrix
-            if (rmsForChecking == 0) {
-              acState[ch] = static_cast<char>(MinimizationState::Precomputed);
-              flags[inputCh] = flag;
-              continue;
-            }
-
-            // for the case when no shortcuts were taken
-            flags[inputCh] = flag;
           }
+          flags[inputCh] = flag;
         }
       }
     }
@@ -308,19 +192,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
   public:
     ALPAKA_FN_ACC void operator()(Acc2D const& acc,
                                   EcalDigiPhase2DeviceCollection::ConstView digisDevEB,
-                                  EcalMultifitConditionsDevice::ConstView conditionsDev,
-                                  ::ecal::multifit::Ph2::SampleGainVector const* gainsNoise,
+                                  EcalMultifitConditionsPhase2Device::ConstView conditionsDev,
                                   ::ecal::multifit::Ph2::SampleMatrix* noisecov,
-                                  ::ecal::multifit::Ph2::PulseMatrixType* pulse_matrix,
-                                  bool const* hasSwitchToGain1,
-                                  bool const* isSaturated) const {
-      constexpr auto nsamples = EcalDataFrame_Ph2::MAXSAMPLES;
-      constexpr float addPedestalUncertainty = 0.f;
-      constexpr bool dynamicPedestal = false;
-      constexpr bool simplifiedNoiseModelForGainSwitch = true;  //---- default is true
-
-      // pulse matrix
-      auto const* pulse_shapes = reinterpret_cast<const EcalPulseShape*>(conditionsDev.pulseShapes().data()->data());
+                                  SamplePulseMatrixPhase2* pulse_matrix) const {
+      constexpr auto nsamples = static_cast<int>(EcalDataFrame_Ph2::MAXSAMPLES);
+      constexpr int tsamples = static_cast<int>(EcalPh2PulseShape::TEMPLATESAMPLES);
 
       auto const blockDimX = alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[1u];
       auto const elemsPerBlockX = alpaka::getWorkDiv<alpaka::Block, alpaka::Elems>(acc)[1u];
@@ -329,104 +205,29 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
       for (auto ndindex : cms::alpakatools::uniform_elements_nd(acc, size_2d)) {
         auto const ch = ndindex[1] / nsamples;
-        auto const tx = ndindex[1] % nsamples;
-        auto const ty = ndindex[0];
+        auto const tx = static_cast<int>(ndindex[1] % nsamples);
+        auto const ty = static_cast<int>(ndindex[0]);
 
-        // to access input arrays (ids and digis only)
-        int const inputCh = ch;
         auto const dids = digisDevEB.id();
-
-        auto const did = DetId{dids[inputCh]};
+        auto const did = DetId{dids[ch]};
         auto const hashedId = ecal::reconstruction::hashedIndexEB(did.rawId());
-        auto const G12SamplesCorrelation = conditionsDev.sampleCorrelation_EB_G12().data();
-        auto const G6SamplesCorrelation = conditionsDev.sampleCorrelation_EB_G6().data();
-        auto const G1SamplesCorrelation = conditionsDev.sampleCorrelation_EB_G1().data();
-        auto const hasGainSwitch = hasSwitchToGain1[ch] || isSaturated[ch];
 
-        auto const vidx = std::abs(static_cast<int>(ty) - static_cast<int>(tx));
+        // noise covariance: no gain switch handling (CPU algo has hasGainSwitch
+        // always false) -> gain-10 pedestal rms and gain-10 sample correlation
+        auto const g10SamplesCorrelation = conditionsDev.sampleCorrelation_g10().data();
+        auto const vidx = std::abs(ty - tx);
+        auto const rms_g10 = conditionsDev.pedestals_rms_g10()[hashedId];
+        noisecov[ch](ty, tx) = rms_g10 * rms_g10 * g10SamplesCorrelation[vidx];
 
-        // non-divergent branch for all threads per block
-        if (hasGainSwitch) {
-          // TODO: did not include simplified noise model
-          float noise_value = 0;
-
-          // non-divergent branch - all threads per block
-          // TODO: all of these constants indicate that
-          // that these parts could be splitted into completely different
-          // kernels and run one of them only depending on the config
-          if (simplifiedNoiseModelForGainSwitch) {
-            constexpr int isample_max = 5;  // according to cpu defs
-            auto const gainidx = gainsNoise[ch][isample_max];
-
-            // non-divergent branches
-            if (gainidx == 0) {
-              auto const rms_x12 = conditionsDev.pedestals_rms_x12()[hashedId];
-              noise_value = rms_x12 * rms_x12 * G12SamplesCorrelation[vidx];
-            } else if (gainidx == 1) {
-              auto const gain12Over6 = conditionsDev.gain12Over6()[hashedId];
-              auto const rms_x6 = conditionsDev.pedestals_rms_x6()[hashedId];
-              noise_value = gain12Over6 * gain12Over6 * rms_x6 * rms_x6 * G6SamplesCorrelation[vidx];
-            } else if (gainidx == 2) {
-              auto const gain12Over6 = conditionsDev.gain12Over6()[hashedId];
-              auto const gain6Over1 = conditionsDev.gain6Over1()[hashedId];
-              auto const gain12Over1 = gain12Over6 * gain6Over1;
-              auto const rms_x1 = conditionsDev.pedestals_rms_x1()[hashedId];
-              noise_value = gain12Over1 * gain12Over1 * rms_x1 * rms_x1 * G1SamplesCorrelation[vidx];
-            }
-            if (!dynamicPedestal && addPedestalUncertainty > 0.f)
-              noise_value += addPedestalUncertainty * addPedestalUncertainty;
-          } else {
-            int gainidx = 0;
-            char mask = gainidx;
-            int pedestal = gainsNoise[ch][ty] == mask ? 1 : 0;
-            //            NB: gainratio is 1, that is why it does not appear in the formula
-            auto const rms_x12 = conditionsDev.pedestals_rms_x12()[hashedId];
-            noise_value += rms_x12 * rms_x12 * pedestal * G12SamplesCorrelation[vidx];
-            // non-divergent branch
-            if (!dynamicPedestal && addPedestalUncertainty > 0.f) {
-              noise_value += addPedestalUncertainty * addPedestalUncertainty * pedestal;  // gainratio is 1
-            }
-
-            //
-            gainidx = 1;
-            mask = gainidx;
-            pedestal = gainsNoise[ch][ty] == mask ? 1 : 0;
-            auto const gain12Over6 = conditionsDev.gain12Over6()[hashedId];
-            auto const rms_x6 = conditionsDev.pedestals_rms_x6()[hashedId];
-            noise_value += gain12Over6 * gain12Over6 * rms_x6 * rms_x6 * pedestal * G6SamplesCorrelation[vidx];
-            // non-divergent branch
-            if (!dynamicPedestal && addPedestalUncertainty > 0.f) {
-              noise_value += gain12Over6 * gain12Over6 * addPedestalUncertainty * addPedestalUncertainty * pedestal;
-            }
-
-            //
-            gainidx = 2;
-            mask = gainidx;
-            pedestal = gainsNoise[ch][ty] == mask ? 1 : 0;
-            auto const gain6Over1 = conditionsDev.gain6Over1()[hashedId];
-            auto const gain12Over1 = gain12Over6 * gain6Over1;
-            auto const rms_x1 = conditionsDev.pedestals_rms_x1()[hashedId];
-            noise_value += gain12Over1 * gain12Over1 * rms_x1 * rms_x1 * pedestal * G1SamplesCorrelation[vidx];
-            // non-divergent branch
-            if (!dynamicPedestal && addPedestalUncertainty > 0.f) {
-              noise_value += gain12Over1 * gain12Over1 * addPedestalUncertainty * addPedestalUncertainty * pedestal;
-            }
-          }
-
-          noisecov[ch](ty, tx) = noise_value;
-        } else {
-          auto const rms = conditionsDev.pedestals_rms_x12()[hashedId];
-          float noise_value = rms * rms * G12SamplesCorrelation[vidx];
-          if (!dynamicPedestal && addPedestalUncertainty > 0.f) {
-            //----  add fully correlated component to noise covariance to inflate pedestal uncertainty
-            noise_value += addPedestalUncertainty * addPedestalUncertainty;
-          }
-          noisecov[ch](ty, tx) = noise_value;
+        // pulse matrix: nsamples x kNPulsesPhase2 (not square as in Phase 1);
+        // mirrors PulseChiSqSNNLS<ecalPh2>: template index = sample - shift with
+        // shift = kTemplateStartSamplePhase2 + kBxToSampleShiftPhase2 * bx
+        if (tx < kNPulsesPhase2) {
+          int const bx = tx - kInTimePulseIdxPhase2;
+          int const tmpl = ty - kTemplateStartSamplePhase2 - kBxToSampleShiftPhase2 * bx;
+          float const value = (tmpl >= 0 && tmpl < tsamples) ? conditionsDev.pulseShapes()[hashedId][tmpl] : 0.f;
+          pulse_matrix[ch](ty, tx) = value;
         }
-
-        auto const posToAccess = 9 - static_cast<int>(tx) + static_cast<int>(ty);  // see cpu for reference
-        float const value = posToAccess >= 7 ? pulse_shapes[hashedId].pdfval[posToAccess - 7] : 0;
-        pulse_matrix[ch](ty, tx) = value;
       }
     }
   };
@@ -446,8 +247,8 @@ namespace alpaka::trait {
                                                                  TVec const& threadsPerBlock,
                                                                  TVec const& elemsPerThread,
                                                                  TArgs const&...) -> std::size_t {
-      // return the amount of dynamic shared memory needed
-      std::size_t bytes = threadsPerBlock[0u] * elemsPerThread[0u] * (5 * sizeof(bool) + sizeof(char));
+      // per-sample saturation flags
+      std::size_t bytes = threadsPerBlock[0u] * elemsPerThread[0u] * sizeof(bool);
       return bytes;
     }
   };

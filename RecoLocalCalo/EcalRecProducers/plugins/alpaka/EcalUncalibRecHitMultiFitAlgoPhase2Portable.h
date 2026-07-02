@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "CondFormats/EcalObjects/interface/alpaka/EcalMultifitConditionsDevice.h"
+#include "CondFormats/EcalObjects/interface/alpaka/EcalMultifitConditionsPhase2Device.h"
 #include "DataFormats/EcalDigi/interface/alpaka/EcalDigiPhase2DeviceCollection.h"
 #include "DataFormats/EcalRecHit/interface/alpaka/EcalUncalibratedRecHitDeviceCollection.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
@@ -19,7 +19,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
   void launchKernels(Queue& queue,
                      InputProduct const& digisDevEB,
                      OutputProduct& uncalibRecHitsDevEB,
-                     EcalMultifitConditionsDevice const& conditionsDev,
+                     EcalMultifitConditionsPhase2Device const& conditionsDev,
                      EcalMultifitParametersPhase2 const* paramsDev,
                      ConfigurationParametersPhase2 const& configParams);
 
