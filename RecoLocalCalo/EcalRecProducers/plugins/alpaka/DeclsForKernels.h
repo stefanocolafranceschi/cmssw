@@ -144,17 +144,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
   };
 
   struct EventDataForScratchDevicePhase2 {
-    using SVT = ::ecal::multifit::SampleVector::Scalar;
-    using SGVT = ::ecal::multifit::SampleGainVector::Scalar;
-    using SMT = ::ecal::multifit::SampleMatrix::Scalar;
-    using PMT = ::ecal::multifit::PulseMatrixType::Scalar;
-    using BXVT = ::ecal::multifit::BXVectorType::Scalar;
+    using SVT = ::ecal::multifit::Ph2::SampleVector::Scalar;
+    using SGVT = ::ecal::multifit::Ph2::SampleGainVector::Scalar;
+    using SMT = ::ecal::multifit::Ph2::SampleMatrix::Scalar;
+    using PMT = ::ecal::multifit::Ph2::PulseMatrixType::Scalar;
+    using BXVT = ::ecal::multifit::Ph2::BXVectorType::Scalar;
 
-    static constexpr auto svlength = getLength<::ecal::multifit::SampleVector>();
-    static constexpr auto sgvlength = getLength<::ecal::multifit::SampleGainVector>();
-    static constexpr auto smlength = getLength<::ecal::multifit::SampleMatrix>();
-    static constexpr auto pmlength = getLength<::ecal::multifit::PulseMatrixType>();
-    static constexpr auto bxvlength = getLength<::ecal::multifit::BXVectorType>();
+    static constexpr auto svlength = getLength<::ecal::multifit::Ph2::SampleVector>();
+    static constexpr auto sgvlength = getLength<::ecal::multifit::Ph2::SampleGainVector>();
+    static constexpr auto smlength = getLength<::ecal::multifit::Ph2::SampleMatrix>();
+    static constexpr auto pmlength = getLength<::ecal::multifit::Ph2::PulseMatrixType>();
+    static constexpr auto bxvlength = getLength<::ecal::multifit::Ph2::BXVectorType>();
 
     // delete the default constructor because alpaka buffers do not have a default constructor
     EventDataForScratchDevicePhase2() = delete;

@@ -32,12 +32,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                                   EcalDigiPhase2DeviceCollection::ConstView digisDevEB,
                                   EcalUncalibratedRecHitDeviceCollection::View uncalibRecHitsEB,
                                   EcalMultifitConditionsDevice::ConstView conditionsDev,
-                                  ::ecal::multifit::SampleVector* amplitudes,
-                                  ::ecal::multifit::SampleGainVector* gainsNoise,
+                                  ::ecal::multifit::Ph2::SampleVector* amplitudes,
+                                  ::ecal::multifit::Ph2::SampleGainVector* gainsNoise,
                                   bool* hasSwitchToGain1,
                                   bool* isSaturated,
                                   char* acState,
-                                  ::ecal::multifit::BXVectorType* bxs,
+                                  ::ecal::multifit::Ph2::BXVectorType* bxs,
                                   bool const gainSwitchUseMaxSampleEB) const {
       constexpr bool dynamicPedestal = false;  //---- default to false, ok
       constexpr auto nsamples = EcalDataFrame_Ph2::MAXSAMPLES;
@@ -161,7 +161,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
           auto const* digis_in = digisDevEB.data().data()->data();
 
           auto* amplitudesForMinimization =
-              reinterpret_cast<::ecal::multifit::SampleVector*>(uncalibRecHitsEB.outOfTimeAmplitudes().data()->data());
+              uncalibRecHitsEB.outOfTimeAmplitudes().data();
           auto energies = uncalibRecHitsEB.amplitude();
           auto chi2 = uncalibRecHitsEB.chi2();
           auto g_pedestal = uncalibRecHitsEB.pedestal();
@@ -170,9 +170,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
           auto const adc = ecalMGPA::adc(digis_in[inputTx]);
           auto const gainId = ecalMGPA::gainId(digis_in[inputTx]);
-          ::ecal::multifit::SampleVector::Scalar amplitude = 0.;
-          ::ecal::multifit::SampleVector::Scalar pedestal = 0.;
-          ::ecal::multifit::SampleVector::Scalar gainratio = 0.;
+          ::ecal::multifit::Ph2::SampleVector::Scalar amplitude = 0.;
+          ::ecal::multifit::Ph2::SampleVector::Scalar pedestal = 0.;
+          ::ecal::multifit::Ph2::SampleVector::Scalar gainratio = 0.;
 
           // TODO: divergent branch
           if (gainId == 0 || gainId == 3) {
@@ -191,9 +191,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
           // TODO: compile time constant -> branch should be non-divergent
           if (dynamicPedestal)
-            amplitude = static_cast<::ecal::multifit::SampleVector::Scalar>(adc) * gainratio;
+            amplitude = static_cast<::ecal::multifit::Ph2::SampleVector::Scalar>(adc) * gainratio;
           else
-            amplitude = (static_cast<::ecal::multifit::SampleVector::Scalar>(adc) - pedestal) * gainratio;
+            amplitude = (static_cast<::ecal::multifit::Ph2::SampleVector::Scalar>(adc) - pedestal) * gainratio;
           amplitudes[ch][sample] = amplitude;
 
 #ifdef ECAL_RECO_ALPAKA_DEBUG
@@ -205,7 +205,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
           //
           // initialization
           //
-          amplitudesForMinimization[inputCh](sample) = 0;
+          // FIXME (Phase 2): outOfTimeAmplitudes holds ecalPh1::sampleSize entries
+          // per channel until the data format is revised; write bounded.
+          if (sample < static_cast<int>(ecalPh1::sampleSize))
+            amplitudesForMinimization[inputCh][sample] = 0;
           bxs[ch](sample) = sample - 5;
 
           // select the thread for the max sample
@@ -306,9 +309,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     ALPAKA_FN_ACC void operator()(Acc2D const& acc,
                                   EcalDigiPhase2DeviceCollection::ConstView digisDevEB,
                                   EcalMultifitConditionsDevice::ConstView conditionsDev,
-                                  ::ecal::multifit::SampleGainVector const* gainsNoise,
-                                  ::ecal::multifit::SampleMatrix* noisecov,
-                                  ::ecal::multifit::PulseMatrixType* pulse_matrix,
+                                  ::ecal::multifit::Ph2::SampleGainVector const* gainsNoise,
+                                  ::ecal::multifit::Ph2::SampleMatrix* noisecov,
+                                  ::ecal::multifit::Ph2::PulseMatrixType* pulse_matrix,
                                   bool const* hasSwitchToGain1,
                                   bool const* isSaturated) const {
       constexpr auto nsamples = EcalDataFrame_Ph2::MAXSAMPLES;

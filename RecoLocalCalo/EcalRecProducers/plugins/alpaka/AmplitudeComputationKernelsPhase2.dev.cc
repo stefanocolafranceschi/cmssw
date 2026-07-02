@@ -13,7 +13,7 @@
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
 
-  using namespace ::ecal::multifit;
+  using namespace ::ecal::multifit::Ph2;
 
   template <typename MatrixType>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void update_covariance(EcalPulseCovariance const& pulse_covariance,
@@ -60,10 +60,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                                   InputProduct::ConstView const& digisDevEB,
                                   OutputProduct::View uncalibRecHitsEB,
                                   EcalMultifitConditionsDevice::ConstView conditionsDev,
-                                  ::ecal::multifit::SampleMatrix const* noisecov,
-                                  ::ecal::multifit::PulseMatrixType const* pulse_matrix,
-                                  ::ecal::multifit::BXVectorType* bxs,
-                                  ::ecal::multifit::SampleVector const* samples,
+                                  ::ecal::multifit::Ph2::SampleMatrix const* noisecov,
+                                  ::ecal::multifit::Ph2::PulseMatrixType const* pulse_matrix,
+                                  ::ecal::multifit::Ph2::BXVectorType* bxs,
+                                  ::ecal::multifit::Ph2::SampleVector const* samples,
                                   bool* hasSwitchToGain1,
                                   bool* isSaturated,
                                   char* acState,
@@ -98,7 +98,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
         DataType* shrAtAStorage =
             shrmem + calo::multifit::MapSymM<DataType, NPULSES>::total * (elemIdx + elemsPerBlock);
 
-        auto* amplitudes = reinterpret_cast<SampleVector*>(uncalibRecHitsEB.outOfTimeAmplitudes().data()->data());
+        auto* amplitudes = uncalibRecHitsEB.outOfTimeAmplitudes().data();
         auto energies = uncalibRecHitsEB.amplitude();
         auto chi2s = uncalibRecHitsEB.chi2();
 
@@ -241,8 +241,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
         energies[idx] = resultAmplitudes(5);
 
         CMS_UNROLL_LOOP
-        for (int counter = 0; counter < NPULSES; ++counter)
-          amplitudes[idx](counter) = resultAmplitudes(counter);
+        // FIXME (Phase 2): outOfTimeAmplitudes holds ecalPh1::sampleSize entries
+        for (int counter = 0; counter < NPULSES && counter < static_cast<int>(ecalPh1::sampleSize);
+             ++counter)
+          amplitudes[idx][counter] = resultAmplitudes(counter);
       }
     }
   };
@@ -266,10 +268,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                         digisDevEB.const_view(),
                         uncalibRecHitsDevEB.view(),
                         conditionsDev.const_view(),
-                        reinterpret_cast<::ecal::multifit::SampleMatrix*>(scratch.noisecovDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::PulseMatrixType*>(scratch.pulse_matrixDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::BXVectorType*>(scratch.activeBXsDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::SampleVector*>(scratch.samplesDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::SampleMatrix*>(scratch.noisecovDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::PulseMatrixType*>(scratch.pulse_matrixDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::BXVectorType*>(scratch.activeBXsDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::SampleVector*>(scratch.samplesDevBuf.data()),
                         scratch.hasSwitchToGain1DevBuf.data(),
                         scratch.isSaturatedDevBuf.data(),
                         scratch.acStateDevBuf.data(),
@@ -291,12 +293,12 @@ namespace alpaka::trait {
                                                                  TVec const& threadsPerBlock,
                                                                  TVec const& elemsPerThread,
                                                                  TArgs const&...) -> std::size_t {
-      using ScalarType = ::ecal::multifit::SampleVector::Scalar;
+      using ScalarType = ::ecal::multifit::Ph2::SampleVector::Scalar;
 
       // return the amount of dynamic shared memory needed
       std::size_t bytes =
           2 * threadsPerBlock[0u] * elemsPerThread[0u] *
-          calo::multifit::MapSymM<ScalarType, ::ecal::multifit::SampleVector::RowsAtCompileTime>::total *
+          calo::multifit::MapSymM<ScalarType, ::ecal::multifit::Ph2::SampleVector::RowsAtCompileTime>::total *
           sizeof(ScalarType);
       return bytes;
     }

@@ -40,20 +40,20 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     auto constexpr threads_1d = kMaxSamples * nchannels_per_block;
     auto const blocks_1d = cms::alpakatools::divide_up_by(nChannels * kMaxSamples, threads_1d);
     auto workDivPrep1D = cms::alpakatools::make_workdiv<Acc1D>(blocks_1d, threads_1d);
-    // Since the ::ecal::multifit::X objects are non-dynamic Eigen::Matrix types the returned pointers from the buffers
-    // and the ::ecal::multifit::X* both point to the data.
+    // Since the ::ecal::multifit::Ph2::X objects are non-dynamic Eigen::Matrix types the returned pointers from the buffers
+    // and the ::ecal::multifit::Ph2::X* both point to the data.
     alpaka::exec<Acc1D>(queue,
                         workDivPrep1D,
                         Kernel_prep_1d_and_initialize{},
                         digisDevEB.const_view(),
                         uncalibRecHitsDevEB.view(),
                         conditionsDev.const_view(),
-                        reinterpret_cast<::ecal::multifit::SampleVector*>(scratch.samplesDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::SampleGainVector*>(scratch.gainsNoiseDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::SampleVector*>(scratch.samplesDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::SampleGainVector*>(scratch.gainsNoiseDevBuf.data()),
                         scratch.hasSwitchToGain1DevBuf.data(),
                         scratch.isSaturatedDevBuf.data(),
                         scratch.acStateDevBuf.data(),
-                        reinterpret_cast<::ecal::multifit::BXVectorType*>(scratch.activeBXsDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::BXVectorType*>(scratch.activeBXsDevBuf.data()),
                         gainSwitchUseMaxSampleEB);
 
     //
@@ -67,9 +67,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
                         Kernel_prep_2d{},
                         digisDevEB.const_view(),
                         conditionsDev.const_view(),
-                        reinterpret_cast<::ecal::multifit::SampleGainVector*>(scratch.gainsNoiseDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::SampleMatrix*>(scratch.noisecovDevBuf.data()),
-                        reinterpret_cast<::ecal::multifit::PulseMatrixType*>(scratch.pulse_matrixDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::SampleGainVector*>(scratch.gainsNoiseDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::SampleMatrix*>(scratch.noisecovDevBuf.data()),
+                        reinterpret_cast<::ecal::multifit::Ph2::PulseMatrixType*>(scratch.pulse_matrixDevBuf.data()),
                         scratch.hasSwitchToGain1DevBuf.data(),
                         scratch.isSaturatedDevBuf.data());
 
