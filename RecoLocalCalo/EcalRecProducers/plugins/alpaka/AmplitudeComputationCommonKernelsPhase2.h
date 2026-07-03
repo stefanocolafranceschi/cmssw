@@ -42,17 +42,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
     DataType gainratio;
     if (gainId == static_cast<int>(ecalPh2::gainId1)) {
       pedestal = conditionsDev.pedestals_mean_g1()[hashedId];
-      gainratio = conditionsDev.gain10Over1()[hashedId];
+      gainratio = 1.;
     } else {
       pedestal = conditionsDev.pedestals_mean_g10()[hashedId];
-      gainratio = 1.;
+      gainratio = conditionsDev.gain10Over1()[hashedId];
     }
 
-    // amplitudes on the gain-10 scale
-    // NOTE: the CPU EcalUncalibRecHitMultiFitAlgoPh2 multiplies ALL samples by the
-    // gain ratio (also gain-10 ones); here the ratio is applied only to gain-1
-    // samples, consistently with the worker's saturation path and with the Phase-2
-    // weights reconstruction. To be confirmed with the reco leads.
+    // amplitudes on the gain-1-equivalent scale: gain-10 samples are scaled by
+    // the gain ratio (nominally 10), gain-1 samples by 1 -- the same convention
+    // as the Phase-2 weights kernel (trace = adc * ecalPh2::gains[gainId]) and,
+    // for pure gain-10 frames, as the CPU EcalUncalibRecHitMultiFitAlgoPh2
+    // (gainratio = *aGain for all samples).
     return (static_cast<DataType>(adc) - pedestal) * gainratio;
   }
 
@@ -213,10 +213,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::ecal::multifit {
         auto const hashedId = ecal::reconstruction::hashedIndexEB(did.rawId());
 
         // noise covariance: no gain switch handling (CPU algo has hasGainSwitch
-        // always false) -> gain-10 pedestal rms and gain-10 sample correlation
+        // always false) -> gain-10 pedestal rms and gain-10 sample correlation.
+        // The rms is scaled by the gain ratio to match the gain-1-equivalent
+        // amplitude scale of the samples (the CPU algo omits this scaling, which
+        // leaves its amplitudes unchanged but inflates its chi2 by ratio^2).
         auto const g10SamplesCorrelation = conditionsDev.sampleCorrelation_g10().data();
         auto const vidx = std::abs(ty - tx);
-        auto const rms_g10 = conditionsDev.pedestals_rms_g10()[hashedId];
+        auto const rms_g10 = conditionsDev.pedestals_rms_g10()[hashedId] * conditionsDev.gain10Over1()[hashedId];
         noisecov[ch](ty, tx) = rms_g10 * rms_g10 * g10SamplesCorrelation[vidx];
 
         // pulse matrix: nsamples x kNPulsesPhase2 (not square as in Phase 1);
