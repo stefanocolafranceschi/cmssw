@@ -142,7 +142,7 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgoPh2::makeRecHit(const EcalDa
       }
     }
   } else {
-    noisecov = aped->rms(ecalPh2::gainId10) * aped->rms(ecalPh2::gainId10) * noisecors[0];
+    noisecov = (*aGain) * (*aGain) * aped->rms(ecalPh2::gainId10) * aped->rms(ecalPh2::gainId10) * noisecors[0];
     if (!dynamicPedestal && addPedestalUncertainty_ > 0.) {
       //add fully correlated component to noise covariance to inflate pedestal uncertainty
       noisecov += addPedestalUncertainty_ * addPedestalUncertainty_ * SampleMatrix::Ones();

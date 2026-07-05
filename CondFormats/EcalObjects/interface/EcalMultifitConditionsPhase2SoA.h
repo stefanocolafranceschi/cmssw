@@ -2,7 +2,6 @@
 #define CondFormats_EcalObjects_EcalMultifitConditionsPhase2SoA_h
 
 #include <array>
-#include <Eigen/Dense>
 #include "DataFormats/SoATemplate/interface/SoACommon.h"
 #include "DataFormats/SoATemplate/interface/SoALayout.h"
 #include "DataFormats/EcalDigi/interface/EcalConstants.h"
@@ -16,8 +15,17 @@
 using PulseShapePhase2Array = std::array<float, EcalPh2PulseShape::TEMPLATESAMPLES>;
 using SampleCorrelationPhase2Array = std::array<double, ecalPh2::sampleSize>;
 
-using CovarianceMatrixPhase2 =
-    Eigen::Matrix<float, EcalPh2PulseShape::TEMPLATESAMPLES, EcalPh2PulseShape::TEMPLATESAMPLES>;
+// Pulse-shape covariance stored ROW-MAJOR and CONTIGUOUS per channel
+// (flat [tr*TEMPLATESAMPLES + tc], layout-compatible with
+// EcalPh2PulseCovariance::covval), deliberately as a plain SOA_COLUMN and
+// NOT as a SOA_EIGEN_COLUMN: SoA Eigen columns store each matrix component
+// in its own stride-separated column, which is incompatible with the
+// kernels' per-channel EcalPh2PulseCovariance aliasing. (Run 3 has exactly
+// this Eigen-column fill / contiguous reinterpret_cast read mismatch in
+// EcalMultifitConditionsSoA + AmplitudeComputationKernels.dev.cc -- flagged
+// upstream; do not copy that pairing here.)
+using PulseCovariancePhase2Array =
+    std::array<float, EcalPh2PulseShape::TEMPLATESAMPLES * EcalPh2PulseShape::TEMPLATESAMPLES>;
 
 GENERATE_SOA_LAYOUT(EcalMultifitConditionsPhase2SoALayout,
                     SOA_COLUMN(uint32_t, rawid),
@@ -30,8 +38,8 @@ GENERATE_SOA_LAYOUT(EcalMultifitConditionsPhase2SoALayout,
                     SOA_COLUMN(float, gain10Over1),
                     // 16-sample pulse shape template (2017 test-beam simulation)
                     SOA_COLUMN(PulseShapePhase2Array, pulseShapes),
-                    // NxN N=TEMPLATESAMPLES(16) for each xtal
-                    SOA_EIGEN_COLUMN(CovarianceMatrixPhase2, pulseCovariance),
+                    // NxN N=TEMPLATESAMPLES(16) for each xtal, row-major flat
+                    SOA_COLUMN(PulseCovariancePhase2Array, pulseCovariance),
                     // Sample correlation scalars: array of 16 values per CATIA gain (barrel only)
                     SOA_SCALAR(SampleCorrelationPhase2Array, sampleCorrelation_g10),
                     SOA_SCALAR(SampleCorrelationPhase2Array, sampleCorrelation_g1))

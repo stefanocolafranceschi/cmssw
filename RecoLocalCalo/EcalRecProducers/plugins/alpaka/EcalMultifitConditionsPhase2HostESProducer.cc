@@ -73,6 +73,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       auto product = std::make_unique<EcalMultifitConditionsPhase2Host>(cms::alpakatools::host(), numberOfXtals);
       auto view = product->view();
 
+      // EcalPh2PulseCovariance::covval is float[T][T], row-major contiguous:
+      // exactly the flat per-channel layout of the SoA pulseCovariance column.
+      constexpr size_t kCovBytes =
+          sizeof(float) * EcalPh2PulseCovariance::TEMPLATESAMPLES * EcalPh2PulseCovariance::TEMPLATESAMPLES;
+      static_assert(sizeof(PulseCovariancePhase2Array) == kCovBytes);
+      static_assert(sizeof(EcalPh2PulseCovariance::covval) == kCovBytes);
+
       for (size_t i = 0; i < numberOfXtals; ++i) {
         auto vi = view[i];
 
@@ -88,11 +95,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         std::memcpy(
             vi.pulseShapes().data(), pulseShapesEB[i].pdfval, sizeof(float) * EcalPh2PulseShape::TEMPLATESAMPLES);
 
-        for (int j = 0; j < EcalPh2PulseCovariance::TEMPLATESAMPLES; ++j) {
-          for (int k = 0; k < EcalPh2PulseCovariance::TEMPLATESAMPLES; ++k) {
-            vi.pulseCovariance()(j, k) = pulseCovariancesEB[i].val(j, k);
-          }
-        }
+        std::memcpy(vi.pulseCovariance().data(), &pulseCovariancesEB[i].covval[0][0], kCovBytes);
       }  // end barrel loop
 
       // === Scalar data (not per xtal)
