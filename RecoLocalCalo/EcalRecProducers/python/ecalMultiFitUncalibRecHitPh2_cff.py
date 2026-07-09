@@ -1,90 +1,143 @@
 import FWCore.ParameterSet.Config as cms
 
-# provides the Phase 2 SampleMask and the Phase 2 SamplesCorrelation
-# all other payloades are not produced
-from CalibCalorimetry.EcalTrivialCondModules.EcalTrivialCondRetriever_cfi import EcalTrivialConditionRetriever as _EcalTrivialConditionRetriever
-EcalTrivialConditionRetriever = _EcalTrivialConditionRetriever.clone(
-  producedEcalAlignmentEB = cms.untracked.bool(False),
-  producedEcalAlignmentEE = cms.untracked.bool(False),
-  producedEcalAlignmentES = cms.untracked.bool(False),
-  producedEcalSimPulseShape = cms.untracked.bool(False),
-  producedEcalChannelStatus = cms.untracked.bool(False),
-  producedEcalDQMTowerStatus = cms.untracked.bool(False),
-  producedEcalDQMChannelStatus = cms.untracked.bool(False),
-  producedEcalDCSTowerStatus = cms.untracked.bool(False),
-  producedEcalDAQTowerStatus = cms.untracked.bool(False),
-  producedEcalTrgChannelStatus = cms.untracked.bool(False),
-  producedEcalPedestals = cms.untracked.bool(False),
-  producedEcalWeights = cms.untracked.bool(False),
-  producedEcalLinearCorrections = cms.untracked.bool(False),
-  producedEcalIntercalibConstants = cms.untracked.bool(False),
-  producedEcalIntercalibConstantsMC = cms.untracked.bool(False),
-  producedEcalIntercalibErrors = cms.untracked.bool(False),
-  producedEcalTimeCalibConstants = cms.untracked.bool(False),
-  producedEcalTimeCalibErrors = cms.untracked.bool(False),
-  producedEcalTimeOffsetConstant = cms.untracked.bool(False),
-  producedEcalLaserCorrection = cms.untracked.bool(False),
-  producedEcalGainRatios = cms.untracked.bool(False),
-  producedEcalADCToGeVConstant = cms.untracked.bool(False),
-  producedEcalMappingElectronics = cms.untracked.bool(False),
-  producedEcalClusterLocalContCorrParameters = cms.untracked.bool(False),
-  producedEcalClusterCrackCorrParameters = cms.untracked.bool(False),
-  producedEcalClusterEnergyUncertaintyParameters = cms.untracked.bool(False),
-  producedEcalClusterEnergyCorrectionParameters = cms.untracked.bool(False),
-  producedEcalClusterEnergyCorrectionObjectSpecificParameters = cms.untracked.bool(False),
-  producedEcalSampleMask = cms.untracked.bool(False),
-  producedEcalTimeBiasCorrections = cms.untracked.bool(False),
-  producedEcalSamplesCorrelation = cms.untracked.bool(False),
+# Phase-2 ECAL barrel multifit amplitude reconstruction, CPU default with an
+# alpaka replacement, mirroring the structure of the Run-3
+# ecalMultiFitUncalibRecHit_cff.py and of the Phase-2 weights
+# ecalUncalibRecHitPhase2_cff.py.
+#
+# This file replaces the earlier SwitchProducerCUDA-based version. Changes:
+#  - SwitchProducerCUDA (removed from CMSSW_20) -> alpaka.toReplaceWith
+#  - EcalTrivialConditionRetriever dropped: its Ph2Weights / Ph2SampleMask /
+#    Ph2SamplesCorrelation payloads are not consumed on the amplitude-only
+#    path (timealgo = crossCorrelationMethod esConsumes nothing extra), and
+#    its SamplesCorrelation would clash with the trivial conditions below.
+#  - the inline 2017 test-beam-sim pulse shape / covariance ESProducers
+#    dropped: that template (peak index 5) is misaligned with the current
+#    digitizer output; conditions come from
+#    ecalPhase2MultifitTrivialConditions_cff (template measured from digis,
+#    peak index 1) until DB tags exist.
 
-  getWeightsFromFile = cms.untracked.bool(False),
-  producedEcalPh2Weights = cms.untracked.bool(True),
-  producedEcalPh2SampleMask = cms.untracked.bool(True),
-  producedEcalPh2SamplesCorrelation = cms.untracked.bool(True)
-)
+# interim conditions for the five Phase-2 records (LiteDTU pedestals, CATIA
+# gain ratios, pulse shape, pulse covariance, samples correlation), needed by
+# both the CPU and the alpaka path.
+# TODO: drop this import once CondTools writers + GlobalTag tags exist.
+from RecoLocalCalo.EcalRecProducers.ecalPhase2MultifitTrivialConditions_cff import *
 
-# provides the Phase 2 pulse shape (same for all channels)
-ecalPh2PulseShapesRcd = cms.ESSource("EmptyESSource",
-    recordName = cms.string("EcalPh2PulseShapesRcd"),
-    firstValid = cms.vuint32(1),
-    iovIsRunNotTime = cms.bool(True)
-)
-ecalPh2PulseShapesESProducer = cms.ESProducer("EcalPh2PulseShapesESProducer",
-    pulseShapes = cms.vdouble(0., 0., 0., 0.0113979, 0.758151, 1.0, 0.887744, 0.673548, 0.474332, 0.319561, 0.215144, 0.147464, 0.101087, 0.0693181, 0.0475044, 0.)
-)
-
-# provides the Phase 2 pulse covariances (same for all channels)
-ecalPh2PulseCovariancesRcd = cms.ESSource("EmptyESSource",
-    recordName = cms.string("EcalPh2PulseCovariancesRcd"),
-    firstValid = cms.vuint32(1),
-    iovIsRunNotTime = cms.bool(True)
-)
-ecalPh2PulseCovariancesESProducer = cms.ESProducer("EcalPh2PulseCovariancesESProducer",
-    pulseCovariances = cms.vdouble(
-        0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  3.001e-06,  1.233e-05,  0.000e+00, -4.416e-06, -4.571e-06, -3.614e-06, -2.636e-06, -1.286e-06, -8.410e-07, -5.296e-07,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  1.233e-05,  6.154e-05,  0.000e+00, -2.200e-05, -2.309e-05, -1.838e-05, -1.373e-05, -7.334e-06, -5.088e-06, -3.745e-06, -2.428e-06,  0.000e+00,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -4.416e-06, -2.200e-05,  0.000e+00,  8.319e-06,  8.545e-06,  6.792e-06,  5.059e-06,  2.678e-06,  1.816e-06,  1.223e-06,  8.245e-07,  5.589e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -4.571e-06, -2.309e-05,  0.000e+00,  8.545e-06,  9.182e-06,  7.219e-06,  5.388e-06,  2.853e-06,  1.944e-06,  1.324e-06,  9.083e-07,  6.335e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -3.614e-06, -1.838e-05,  0.000e+00,  6.792e-06,  7.219e-06,  6.016e-06,  4.437e-06,  2.385e-06,  1.636e-06,  1.118e-06,  7.754e-07,  5.556e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -2.636e-06, -1.373e-05,  0.000e+00,  5.059e-06,  5.388e-06,  4.437e-06,  3.602e-06,  1.917e-06,  1.322e-06,  9.079e-07,  6.529e-07,  4.752e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -1.286e-06, -7.334e-06,  0.000e+00,  2.678e-06,  2.853e-06,  2.385e-06,  1.917e-06,  1.375e-06,  9.100e-07,  6.455e-07,  4.693e-07,  3.657e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -8.410e-07, -5.088e-06,  0.000e+00,  1.816e-06,  1.944e-06,  1.636e-06,  1.322e-06,  9.100e-07,  9.115e-07,  6.062e-07,  4.436e-07,  3.422e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00, -5.296e-07, -3.745e-06,  0.000e+00,  1.223e-06,  1.324e-06,  1.118e-06,  9.079e-07,  6.455e-07,  6.062e-07,  7.217e-07,  4.862e-07,  3.768e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  0.000e+00, -2.428e-06,  0.000e+00,  8.245e-07,  9.083e-07,  7.754e-07,  6.529e-07,  4.693e-07,  4.436e-07,  4.862e-07,  6.509e-07,  4.418e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  5.589e-07,  6.335e-07,  5.556e-07,  4.752e-07,  3.657e-07,  3.422e-07,  3.768e-07,  4.418e-07,  6.142e-07,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,
-        0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,  0.000e+00,
+# ECAL Phase-2 multifit running on CPU.
+# Overrides wrt the cfi (validated in the step-6 CPU-vs-GPU comparison):
+#  - EBdigiCollection: Phase-2 MC digis (EBDigiCollectionPh2), not the
+#    Phase-1 unpacker output
+#  - timealgo = crossCorrelationMethod: the only amplitude-only choice; the
+#    ParameterSwitch has no "None" case, RatioMethod would esConsume four
+#    more record-less products, WeightsMethod needs EcalPh2TBWeights. Its
+#    Phase-2 body is commented out upstream (jitter = 0). Because algoPSet
+#    is validated through a ParameterSwitch on timealgo, the RatioMethod
+#    parameters carried by the cfi are ILLEGAL (not merely inert) under any
+#    other case and must be deleted in the clone (param = None deletes).
+#  - useLumiInfoRunHeader = False + bunchSpacing = 0: activeBXs {-2..2} used
+#    as-is, no bunchSpacingProducer dependency; same 5 pulses as the GPU.
+#  - ampErrorCalculation = False mirrors the GPU (no amplitude error kernel).
+#  - gainSwitchUseMaxSample = False (inert: Phase-2 algo hardcodes
+#    hasGainSwitch = false).
+from RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHitPh2_cfi import ecalMultiFitUncalibRecHitPh2 as _ecalMultiFitUncalibRecHitPh2
+ecalMultiFitUncalibRecHitPh2 = _ecalMultiFitUncalibRecHitPh2.clone(
+    EBdigiCollection = 'simEcalUnsuppressedDigis',
+    algoPSet = dict(
+        ampErrorCalculation = False,
+        useLumiInfoRunHeader = False,
+        bunchSpacing = cms.int32(0),
+        gainSwitchUseMaxSample = False,
+        timealgo = 'crossCorrelationMethod',
+        # delete the RatioMethod-case parameters (illegal under
+        # crossCorrelationMethod, see above)
+        timeFitParameters = None,
+        amplitudeFitParameters = None,
+        timeFitLimits_Lower = None,
+        timeFitLimits_Upper = None,
+        timeConstantTerm = None,
+        timeNconst = None,
+        outOfTimeThresholdGain10p = None,
+        outOfTimeThresholdGain10m = None,
+        outOfTimeThresholdGain1p = None,
+        outOfTimeThresholdGain1m = None,
+        amplitudeThreshold = None,
     )
 )
-
-# ECAL multifit running on CPU
-from RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHitPh2_cfi import ecalMultiFitUncalibRecHitPh2 as _ecalMultiFitUncalibRecHitPh2
-ecalMultiFitUncalibRecHitPh2 = _ecalMultiFitUncalibRecHitPh2.clone()
+ecalMultiFitUncalibRecHitPh2Legacy = ecalMultiFitUncalibRecHitPh2.clone()
 
 ecalMultiFitUncalibRecHitPh2Task = cms.Task(
-  # ECAL multifit running on CPU
-  ecalMultiFitUncalibRecHitPh2
+    # ECAL Phase-2 multifit running on CPU
+    ecalMultiFitUncalibRecHitPh2
 )
 
+# process modifier to run the alpaka implementation
+from Configuration.ProcessModifiers.alpaka_cff import alpaka
+
+# ECAL multifit conditions on the device, filled from the five Phase-2
+# records. Enclosed in a Task to prevent the construction of the ESProducer
+# in the default (CPU) configuration.
+from RecoLocalCalo.EcalRecProducers.ecalMultifitConditionsPhase2HostESProducer_cfi import ecalMultifitConditionsPhase2HostESProducer
+ecalMultiFitUncalibRecHitPh2PortableConditions = cms.Task(ecalMultifitConditionsPhase2HostESProducer)
+
+# The digi -> portable collection producer (simEcalUnsuppressedDigisSoA) is
+# deliberately NOT defined or scheduled here; it is referenced by label only,
+# mirroring the Run-3 multifit cff, which likewise consumes
+# 'ecalDigisPortable:ebDigis' without owning that module. In the Phase-2
+# workflows the module is provided by ecalUncalibRecHitPhase2_cff (weights)
+# via ecalLocalRecoSequence. It cannot be defined here:
+#  - an identical clone fails at process.load ("Trying to override definition
+#    of simEcalUnsuppressedDigisSoA while it is used by the task
+#    calolocalrecoTask") -- task-referenced labels are compared by object
+#    identity, not parameter equality;
+#  - importing the object from the weights cff is a circular import, because
+#    on this branch ecalUncalibRecHitPhase2_cfi imports THIS cff to define
+#    its CPU placeholder.
+# A standalone (weights-free) multifit config must schedule the digi->SoA
+# producer itself.
+
+# ECAL Phase-2 multifit running on the accelerator
+from RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitPhase2ProducerPortable_cfi import ecalUncalibRecHitPhase2ProducerPortable as _ecalUncalibRecHitPhase2ProducerPortable
+ecalMultiFitUncalibRecHitPh2Portable = _ecalUncalibRecHitPhase2ProducerPortable.clone(
+    digisLabelEB = 'simEcalUnsuppressedDigisSoA:ebDigis'
+)
+
+# convert the uncalibrated rechits from SoA to legacy format at the same
+# module label consumed downstream
+from RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitSoAToLegacy_cfi import ecalUncalibRecHitSoAToLegacy as _ecalUncalibRecHitSoAToLegacy
+alpaka.toReplaceWith(ecalMultiFitUncalibRecHitPh2, _ecalUncalibRecHitSoAToLegacy.clone(
+    isPhase2 = True,
+    inputCollectionEB = 'ecalMultiFitUncalibRecHitPh2Portable:EcalUncalibRecHitsEB',
+    inputCollectionEE = None,
+    outputLabelEE = None
+))
+
+alpaka.toReplaceWith(ecalMultiFitUncalibRecHitPh2Task, cms.Task(
+    # ECAL multifit conditions on the device
+    ecalMultiFitUncalibRecHitPh2PortableConditions,
+    # ECAL Phase-2 multifit running on the device
+    # (simEcalUnsuppressedDigisSoA is provided by the weights cff, see above)
+    ecalMultiFitUncalibRecHitPh2Portable,
+    # convert the uncalibrated rechits from SoA to legacy format
+    ecalMultiFitUncalibRecHitPh2,
+))
+
+# for GPU validation run the CPU multifit alongside the alpaka modules
+from Configuration.ProcessModifiers.gpuValidationEcal_cff import gpuValidationEcal
+_ecalMultiFitUncalibRecHitPh2TaskValidation = ecalMultiFitUncalibRecHitPh2Task.copy()
+_ecalMultiFitUncalibRecHitPh2TaskValidation.add(ecalMultiFitUncalibRecHitPh2Legacy)
+gpuValidationEcal.toReplaceWith(ecalMultiFitUncalibRecHitPh2Task, _ecalMultiFitUncalibRecHitPh2TaskValidation)
+
+# for alpaka validation compare alpaka serial with alpaka
+from Configuration.ProcessModifiers.alpakaValidationEcal_cff import alpakaValidationEcal
+from HeterogeneousCore.AlpakaCore.functions import makeSerialClone
+ecalMultiFitUncalibRecHitPh2PortableSerialSync = makeSerialClone(ecalMultiFitUncalibRecHitPh2Portable)
+ecalMultiFitUncalibRecHitPh2SerialSync = _ecalUncalibRecHitSoAToLegacy.clone(
+    isPhase2 = True,
+    inputCollectionEB = 'ecalMultiFitUncalibRecHitPh2PortableSerialSync:EcalUncalibRecHitsEB',
+    inputCollectionEE = None,
+    outputLabelEE = None
+)
+_ecalMultiFitUncalibRecHitPh2TaskValidation = ecalMultiFitUncalibRecHitPh2Task.copy()
+_ecalMultiFitUncalibRecHitPh2TaskValidation.add(ecalMultiFitUncalibRecHitPh2PortableSerialSync)
+_ecalMultiFitUncalibRecHitPh2TaskValidation.add(ecalMultiFitUncalibRecHitPh2SerialSync)
+alpakaValidationEcal.toReplaceWith(ecalMultiFitUncalibRecHitPh2Task, _ecalMultiFitUncalibRecHitPh2TaskValidation)
