@@ -14,9 +14,9 @@ ecalUncalibRecHitPhase2Task = cms.Task(
 # process modifier to run alpaka implementation
 from Configuration.ProcessModifiers.alpaka_cff import alpaka
 
-#ECAL Phase 2 Digis Producer running on the accelerator
-from RecoLocalCalo.EcalRecProducers.ecalPhase2DigiToPortableProducer_cfi import ecalPhase2DigiToPortableProducer as _ecalPhase2DigiToPortableProducer
-simEcalUnsuppressedDigisSoA = _ecalPhase2DigiToPortableProducer.clone()
+# ECAL Phase 2 Digis Producer running on the accelerator, shared (same
+# module OBJECT) with the multifit cff via the leaf ecalPhase2DigisSoA_cff
+from RecoLocalCalo.EcalRecProducers.ecalPhase2DigisSoA_cff import simEcalUnsuppressedDigisSoA
 
 # ECAL Phase 2 weights portable running
 from RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitPhase2WeightsProducerPortable_cfi import ecalUncalibRecHitPhase2WeightsProducerPortable as _ecalUncalibRecHitPhase2Portable
@@ -36,7 +36,7 @@ alpaka.toReplaceWith(ecalUncalibRecHitPhase2, _ecalUncalibRecHitSoAToLegacy.clon
 
 alpaka.toReplaceWith(ecalUncalibRecHitPhase2Task, cms.Task(
   # convert phase2 digis to Portable Collection
-  simEcalUnsuppressedDigisSoA, 
+  simEcalUnsuppressedDigisSoA,
   # ECAL weights running on Device
   ecalUncalibRecHitPhase2SoA,
   # Convert the uncalibrated rechits from Portable Collection to legacy format

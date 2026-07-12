@@ -1,17 +1,17 @@
-#import  RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitPhase2WeightsProducer_cfi as _mod
-#ecalUncalibRecHitPhase2 = _mod.ecalUncalibRecHitPhase2WeightsProducer.clone()
+import FWCore.ParameterSet.Config as cms
 
-from SimCalorimetry.EcalSimProducers.esCATIAGainProducer_cfi import *
-from SimCalorimetry.EcalSimProducers.esEcalLiteDTUPedestalsProducer_cfi import *
+# CPU definition of the Phase-2 uncalibrated-rechit producer label.
+# Under the alpaka process modifier this module is replaced by the SoA->legacy
+# converter fed by the device weights producer (see ecalUncalibRecHitPhase2_cff),
+# so this is effectively a placeholder for non-alpaka configurations.
+#
+# It clones the CPU multifit *cfi* (a leaf, with its own defaults). Earlier
+# this file imported the multifit *cff* -- a cfi importing a cff is inverted
+# layering and created a circular-import chain
+# (weights cff -> this cfi -> multifit cff -> ...); do not reintroduce it.
 
-#from RecoLocalCalo.EcalRecProducers.ecalFixedAlphaBetaFitUncalibRecHitPh2_cfi import *
-#ecalUncalibRecHitPhase2 = ecalFixedAlphaBetaFitUncalibRecHitPh2.clone(
-#    EBdigiCollection = cms.InputTag("simEcalUnsuppressedDigis")
-#)
+from RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHitPh2_cfi import ecalMultiFitUncalibRecHitPh2 as _ecalMultiFitUncalibRecHitPh2
 
-# use only the cpu branch of the switchProducer for now
-from RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHitPh2_cff import *
-ecalUncalibRecHitPhase2 = ecalMultiFitUncalibRecHitPh2.clone(
+ecalUncalibRecHitPhase2 = _ecalMultiFitUncalibRecHitPh2.clone(
     EBdigiCollection = cms.InputTag("simEcalUnsuppressedDigis")
 )
-

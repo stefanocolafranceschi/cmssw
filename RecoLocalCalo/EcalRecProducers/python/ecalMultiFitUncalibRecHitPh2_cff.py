@@ -79,21 +79,13 @@ from Configuration.ProcessModifiers.alpaka_cff import alpaka
 from RecoLocalCalo.EcalRecProducers.ecalMultifitConditionsPhase2HostESProducer_cfi import ecalMultifitConditionsPhase2HostESProducer
 ecalMultiFitUncalibRecHitPh2PortableConditions = cms.Task(ecalMultifitConditionsPhase2HostESProducer)
 
-# The digi -> portable collection producer (simEcalUnsuppressedDigisSoA) is
-# deliberately NOT defined or scheduled here; it is referenced by label only,
-# mirroring the Run-3 multifit cff, which likewise consumes
-# 'ecalDigisPortable:ebDigis' without owning that module. In the Phase-2
-# workflows the module is provided by ecalUncalibRecHitPhase2_cff (weights)
-# via ecalLocalRecoSequence. It cannot be defined here:
-#  - an identical clone fails at process.load ("Trying to override definition
-#    of simEcalUnsuppressedDigisSoA while it is used by the task
-#    calolocalrecoTask") -- task-referenced labels are compared by object
-#    identity, not parameter equality;
-#  - importing the object from the weights cff is a circular import, because
-#    on this branch ecalUncalibRecHitPhase2_cfi imports THIS cff to define
-#    its CPU placeholder.
-# A standalone (weights-free) multifit config must schedule the digi->SoA
-# producer itself.
+# ECAL Phase-2 digis to portable collection: the SAME module OBJECT as the
+# weights reco, shared via the leaf ecalPhase2DigisSoA_cff. Object identity
+# (not parameter equality) is what process.load requires for a label already
+# referenced by a task (step-8 lesson 1); the shared leaf cff also keeps the
+# import graph acyclic (step-8 lesson 2 -- the historical cycle went through
+# ecalUncalibRecHitPhase2_cfi importing this cff, fixed in step 11).
+from RecoLocalCalo.EcalRecProducers.ecalPhase2DigisSoA_cff import simEcalUnsuppressedDigisSoA
 
 # ECAL Phase-2 multifit running on the accelerator
 from RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitPhase2ProducerPortable_cfi import ecalUncalibRecHitPhase2ProducerPortable as _ecalUncalibRecHitPhase2ProducerPortable
@@ -114,8 +106,9 @@ alpaka.toReplaceWith(ecalMultiFitUncalibRecHitPh2, _ecalUncalibRecHitSoAToLegacy
 alpaka.toReplaceWith(ecalMultiFitUncalibRecHitPh2Task, cms.Task(
     # ECAL multifit conditions on the device
     ecalMultiFitUncalibRecHitPh2PortableConditions,
+    # convert Phase-2 digis to portable collection (shared object, see above)
+    simEcalUnsuppressedDigisSoA,
     # ECAL Phase-2 multifit running on the device
-    # (simEcalUnsuppressedDigisSoA is provided by the weights cff, see above)
     ecalMultiFitUncalibRecHitPh2Portable,
     # convert the uncalibrated rechits from SoA to legacy format
     ecalMultiFitUncalibRecHitPh2,
